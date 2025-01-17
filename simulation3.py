@@ -1,12 +1,19 @@
 import random
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import Dict
 from enum import Enum
 import os
 
 def clear_console():
     os.system('clear')
+
+class RaceStatus(Enum):
+    GREEN = "🟢 Racing"
+    YELLOW = "🟡 Yellow Flag"
+    SC = "🚨 Safety Car"
+    VSC = "🟡 Virtual Safety Car"
+    RED = "🔴 Red Flag"
 
 class Weather(Enum):
     DRY = "Dry"
@@ -44,6 +51,12 @@ class Driver:
 
 @dataclass
 class Car:
+    def update_status(self) -> str:
+        if self.dnf:
+            return f"DNF ({self.dnf_reason})"
+        if self.in_pit:
+            return "In Pit"
+        return "Running"
     driver: Driver
     position: int = 0
     gap_to_leader: float = 0.0
@@ -59,17 +72,22 @@ class Car:
     in_pit: bool = False
     dnf: bool = False
     dnf_reason: str = ""
-    drs_available: bool = False
+    dnf_lap: int = 0
+    race_status: str = "Running"
 
 class F1Simulator:
     def __init__(self):
         self.circuit_name = "Marina Bay Street Circuit"
         self.total_laps = 61
         self.current_lap = 0
+        self.race_status = RaceStatus.GREEN
         self.safety_car = False
         self.safety_car_laps = 0
         self.weather = Weather.DRY
         self.base_laptime = 98.0
+        self.dnf_count = 0
+        self.max_dnf = 2
+        
         self.team_pit_times = {
             "Red Bull": 2.0,
             "Mercedes": 2.2,
@@ -107,6 +125,22 @@ class F1Simulator:
         ]
         
         self.cars = [Car(driver) for driver in self.drivers]
+        self.initialize_race()
+
+    def initialize_race(self):
+        for i, car in enumerate(self.cars):
+            car.position = i + 1
+            if i < 10:
+                car.current_tire = TireCompound.SOFT
+            else:
+                car.current_tire = random.choice([TireCompound.MEDIUM, TireCompound.HARD])
+
+    def display_race_banner(self):
+        print("\n" + "=" * 80)
+        print(f"Lap {self.current_lap}/{self.total_laps} | {self.race_status.value} | {self.weather.value}")
+        if self.safety_car:
+            print("🚨 Safety Car Period - Delta Time: +1.5s")
+        print("=" * 80 + "\n")
 
     def calculate_sector_time(self, car: Car, sector: int) -> float:
         base_sector = self.base_laptime / 3
@@ -115,10 +149,13 @@ class F1Simulator:
         tire_delta = car.current_tire["pace_delta"] / 3
         tire_deg = (car.tire_age / car.current_tire["max_laps"]) * 0.7
         
+        if self.safety_car:
+            return base_sector * 1.4
+            
         if car.in_pit and sector == 3:
             return base_sector + self.team_pit_times[car.driver.team]
             
-        random_factor = random.uniform(-0.3, 0.3) * car.driver.skill
+        random_factor = random.uniform(-0.2, 0.2) * car.driver.skill
         return (base_sector * team_factor * skill_factor) + tire_delta + tire_deg + random_factor
 
     def handle_pit_stop(self, car: Car):
@@ -126,54 +163,96 @@ class F1Simulator:
             car.in_pit = False
             car.pit_timer = 0
             car.pit_stops += 1
-            available_compounds = [TireCompound.SOFT, TireCompound.MEDIUM, TireCompound.HARD]
-            car.current_tire = random.choice([c for c in available_compounds if c != car.current_tire])
+            
+            # Strategic tire choice
+            if self.current_lap > (self.total_laps - 15):
+                car.current_tire = TireCompound.SOFT
+            elif car.position <= 6:
+                car.current_tire = TireCompound.MEDIUM
+            else:
+                car.current_tire = TireCompound.HARD
+                
             car.tire_age = 0
         else:
             car.pit_timer += 1
+
+    def check_incidents(self, car: Car) -> bool:
+        if self.dnf_count >= self.max_dnf or car.dnf or random.random() > 0.001:
+            return False
+            
+        car.dnf = True
+        car.dnf_lap = self.current_lap
+        car.dnf_reason = random.choice(["Engine", "Gearbox", "Collision", "Hydraulics"])
+        self.dnf_count += 1
+        
+        if not self.safety_car and random.random() < 0.7:
+            self.safety_car = True
+            self.safety_car_laps = 5
+            self.race_status = RaceStatus.SC
+            print(f"\n💥 Incident: {car.driver.name} - {car.dnf_reason}")
+            print("🚨 Safety Car Deployed")
+        return True
 
     def run_race(self):
         print(f"\nRace Start - {self.circuit_name}")
         
         for lap in range(1, self.total_laps + 1):
             self.current_lap = lap
-            print(f"\nLap {lap}/{self.total_laps}")
-            print(f"Weather: {self.weather.value}")
+            self.display_race_banner()
             
+            # Process each sector
             for sector in range(1, 4):
                 print(f"\nSector {sector}:")
-                for car in self.cars:  # Process all cars, including DNF
-                    if not car.dnf:
-                        sector_time = self.calculate_sector_time(car, sector)
-                        if sector == 1:
-                            car.sector1_time = sector_time
-                        elif sector == 2:
-                            car.sector2_time = sector_time
-                        else:
-                            car.sector3_time = sector_time
-                            car.last_lap = car.sector1_time + car.sector2_time + car.sector3_time
-                            car.total_race_time += car.last_lap
-                        
-                        if car.in_pit:
-                            self.handle_pit_stop(car)
-                            
-                        if random.random() < 0.005:  # DNF chance
-                            car.dnf = True
-                            car.dnf_reason = random.choice(["Engine", "Gearbox", "Collision", "Hydraulics"])
-                            print(f"⚠️ DNF: {car.driver.name} - {car.dnf_reason}")
                 
-                # Display all cars
+                # Update active cars
+                for car in [c for c in self.cars if not c.dnf]:
+                    # Increment tire age at start of lap
+                    if sector == 1:
+                        car.tire_age += 1
+                        
+                        # Check for pit stops
+                        if car.tire_age >= car.current_tire["max_laps"]:
+                            car.in_pit = True
+                            
+                    # Calculate sector time
+                    sector_time = self.calculate_sector_time(car, sector)
+                    setattr(car, f"sector{sector}_time", sector_time)
+                    if sector == 3:
+                        car.last_lap = car.sector1_time + car.sector2_time + car.sector3_time
+                        car.total_race_time += car.last_lap
+                    
+                    # Handle pit stops
+                    if car.in_pit:
+                        self.handle_pit_stop(car)
+                    
+                    # Check for incidents
+                    self.check_incidents(car)
+                
+                # Display positions
                 print("\nPositions:")
                 all_cars = sorted(self.cars, key=lambda x: float('inf') if x.dnf else x.total_race_time)
-                leader_time = next((car.total_race_time for car in all_cars if not car.dnf), 0)
+                leader_time = next((c.total_race_time for c in all_cars if not c.dnf), 0)
                 
                 for pos, car in enumerate(all_cars, 1):
-                    status = f"DNF - {car.dnf_reason}" if car.dnf else ("IN PIT" if car.in_pit else car.current_tire["name"])
-                    gap = "DNF" if car.dnf else f"+{car.total_race_time - leader_time:.3f}s"
-                    sector_time = getattr(car, f"sector{sector}_time", 0.0)
-                    print(f"{pos}. {car.driver.name:15} | S{sector}: {sector_time:.3f} | Gap: {gap} | {status} ({car.tire_age})")
+                    car.last_position = pos
+                    status = car.update_status()
+                    
+                    if car.dnf:
+                        print(f"{pos}. {car.driver.name:15} | {status}")
+                    else:
+                        gap = f"+{car.total_race_time - leader_time:.3f}s"
+                        sector_time = getattr(car, f"sector{sector}_time", 0.0)
+                        print(f"{pos}. {car.driver.name:15} | S{sector}: {sector_time:.3f} | Gap: {gap} | Tire Age: {car.tire_age} | {status}")
                 
                 time.sleep(1)
+            
+            # Handle safety car
+            if self.safety_car:
+                self.safety_car_laps -= 1
+                if self.safety_car_laps <= 0:
+                    self.safety_car = False
+                    self.race_status = RaceStatus.GREEN
+                    print("\n🏁 Safety Car In This Lap!")
             
             time.sleep(2)
             clear_console()
