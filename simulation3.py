@@ -18,6 +18,20 @@ class TireCompound:
     MEDIUM = {"name": "Medium", "max_laps": 25, "pace_delta": 0, "wear_rate": 1.0}
     HARD = {"name": "Hard", "max_laps": 30, "pace_delta": 0.8, "wear_rate": 0.7}
 
+class TeamPerformance:
+    FACTORS = {
+        "Red Bull": {"S1": 0.97, "S2": 0.96, "S3": 0.97, "base": 0.95},
+        "Mercedes": {"S1": 0.98, "S2": 0.97, "S3": 0.98, "base": 0.96},
+        "Ferrari": {"S1": 0.98, "S2": 0.98, "S3": 0.97, "base": 0.96},
+        "McLaren": {"S1": 0.99, "S2": 0.99, "S3": 0.99, "base": 0.97},
+        "Aston Martin": {"S1": 1.00, "S2": 1.00, "S3": 1.00, "base": 0.98},
+        "Alpine": {"S1": 1.01, "S2": 1.01, "S3": 1.01, "base": 0.99},
+        "Williams": {"S1": 1.02, "S2": 1.02, "S3": 1.02, "base": 1.00},
+        "AlphaTauri": {"S1": 1.03, "S2": 1.03, "S3": 1.03, "base": 1.01},
+        "Alfa Romeo": {"S1": 1.04, "S2": 1.04, "S3": 1.04, "base": 1.02},
+        "Haas": {"S1": 1.05, "S2": 1.05, "S3": 1.05, "base": 1.03}
+    }
+
 @dataclass
 class Driver:
     name: str
@@ -27,7 +41,6 @@ class Driver:
     wet_skill: float
     aggression: float
     tire_management: float
-    preferred_strategy: List[Dict] = field(default_factory=list)
 
 @dataclass
 class Car:
@@ -36,15 +49,17 @@ class Car:
     gap_to_leader: float = 0.0
     current_tire: Dict = field(default_factory=lambda: TireCompound.SOFT)
     tire_age: int = 0
-    lap_time: float = 0.0
+    sector1_time: float = 0.0
+    sector2_time: float = 0.0
+    sector3_time: float = 0.0
     last_lap: float = 0.0
+    total_race_time: float = 0.0
+    pit_timer: float = 0.0
     pit_stops: int = 0
     in_pit: bool = False
-    pit_time_remaining: float = 0.0
     dnf: bool = False
     dnf_reason: str = ""
-    total_race_time: float = 0.0
-    gap_to_front: float = 0.0
+    drs_available: bool = False
 
 class F1Simulator:
     def __init__(self):
@@ -55,7 +70,18 @@ class F1Simulator:
         self.safety_car_laps = 0
         self.weather = Weather.DRY
         self.base_laptime = 98.0
-        self.dnf_count = 0  # Track number of DNFs
+        self.team_pit_times = {
+            "Red Bull": 2.0,
+            "Mercedes": 2.2,
+            "Ferrari": 2.3,
+            "McLaren": 2.4,
+            "Aston Martin": 2.5,
+            "Alpine": 2.6,
+            "Williams": 2.7,
+            "AlphaTauri": 2.8,
+            "Alfa Romeo": 2.9,
+            "Haas": 3.0
+        }
         
         self.drivers = [
             Driver("Max Verstappen", 1, "Red Bull", 0.98, 0.95, 0.90, 0.92),
@@ -80,71 +106,31 @@ class F1Simulator:
             Driver("Nico Hulkenberg", 27, "Haas", 0.90, 0.87, 0.84, 0.85)
         ]
         
-        self.assign_strategies()
         self.cars = [Car(driver) for driver in self.drivers]
-        self.initialize_race()
 
-    def initialize_race(self):
-        # Assign starting tires: Top 10 on Soft, others on Medium or Hard
-        for i, car in enumerate(self.cars):
-            if i < 10:
-                car.current_tire = TireCompound.SOFT
-            else:
-                car.current_tire = random.choice([TireCompound.MEDIUM, TireCompound.HARD])
-            car.tire_age = 0
-
-    def assign_strategies(self):
-        strategies = {
-            "Red Bull": [TireCompound.SOFT, TireCompound.HARD],
-            "Mercedes": [TireCompound.MEDIUM, TireCompound.HARD],
-            "Ferrari": [TireCompound.SOFT, TireCompound.MEDIUM],
-            "default": [TireCompound.MEDIUM, TireCompound.HARD]
-        }
-        for driver in self.drivers:
-            driver.preferred_strategy = strategies.get(driver.team, strategies["default"])
-
-    def calculate_lap_time(self, car: Car) -> float:
-        base = self.base_laptime
+    def calculate_sector_time(self, car: Car, sector: int) -> float:
+        base_sector = self.base_laptime / 3
+        team_factor = TeamPerformance.FACTORS[car.driver.team][f"S{sector}"]
         skill_factor = 1 - ((car.driver.skill - 0.8) * 0.5)
-        tire_delta = car.current_tire["pace_delta"]
-        tire_deg = (car.tire_age / car.current_tire["max_laps"]) * 2.0
+        tire_delta = car.current_tire["pace_delta"] / 3
+        tire_deg = (car.tire_age / car.current_tire["max_laps"]) * 0.7
         
-        if self.safety_car:
-            return base * 1.4
-        if car.in_pit:
-            return base + 23.0
+        if car.in_pit and sector == 3:
+            return base_sector + self.team_pit_times[car.driver.team]
             
-        variation = random.uniform(-0.3, 0.3)
-        final_time = (base * skill_factor) + tire_delta + tire_deg + variation
-        
-        return final_time
+        random_factor = random.uniform(-0.3, 0.3) * car.driver.skill
+        return (base_sector * team_factor * skill_factor) + tire_delta + tire_deg + random_factor
 
-    def calculate_overtake_probability(self, car1: Car, car2: Car) -> float:
-        if car1.position == 1:  # Race leader cannot overtake
-            return 0.0
-        if abs(car1.gap_to_front) < 1.0:
-            pace_delta = car2.lap_time - car1.lap_time
-            tire_advantage = car2.tire_age - car1.tire_age
-            skill_factor = car1.driver.skill - car2.driver.skill
-            return min(0.8, max(0.1, (pace_delta + tire_advantage/10 + skill_factor) * 0.3))
-        return 0.0
-
-    def handle_safety_car(self):
-        if self.safety_car:
-            self.safety_car_laps -= 1
-            if self.safety_car_laps <= 0:
-                self.safety_car = False
-                print("\n🏁 Safety Car in this lap!")
-            return True
-        return False
-
-    def ensure_team_tire_difference(self, car: Car):
-        # Ensure teammates have different tires
-        teammate = next((c for c in self.cars if c.driver.team == car.driver.team and c != car), None)
-        if teammate and car.current_tire == teammate.current_tire:
-            # Switch to the other available tire
-            available_tires = [t for t in [TireCompound.SOFT, TireCompound.MEDIUM, TireCompound.HARD] if t != teammate.current_tire]
-            car.current_tire = random.choice(available_tires)
+    def handle_pit_stop(self, car: Car):
+        if car.pit_timer >= self.team_pit_times[car.driver.team]:
+            car.in_pit = False
+            car.pit_timer = 0
+            car.pit_stops += 1
+            available_compounds = [TireCompound.SOFT, TireCompound.MEDIUM, TireCompound.HARD]
+            car.current_tire = random.choice([c for c in available_compounds if c != car.current_tire])
+            car.tire_age = 0
+        else:
+            car.pit_timer += 1
 
     def run_race(self):
         print(f"\nRace Start - {self.circuit_name}")
@@ -154,60 +140,40 @@ class F1Simulator:
             print(f"\nLap {lap}/{self.total_laps}")
             print(f"Weather: {self.weather.value}")
             
-            if self.handle_safety_car():
-                continue
-            
-            for car in self.cars:
-                if not car.dnf:
-                    # Incident check (max 3 DNFs)
-                    if self.dnf_count < 3 and random.random() < 0.01:
-                        car.dnf = True
-                        car.dnf_reason = "Crash"
-                        self.dnf_count += 1
-                        self.safety_car = True
-                        self.safety_car_laps = 5
-                        print(f"\n💥 Incident: {car.driver.name} - DNF ({car.dnf_reason})")
-                        continue
-                    
-                    # Pit stop check
-                    car.tire_age += 1
-                    if car.tire_age >= car.current_tire["max_laps"]:
-                        if not car.in_pit:
-                            car.in_pit = True
-                            car.pit_time_remaining = 1.5  # 1.5 seconds pit time
-                            print(f"\n🔧 Pit Stop: {car.driver.name}")
-                            # Assign tires based on team strategy
-                            car.current_tire = car.driver.preferred_strategy[car.pit_stops % len(car.driver.preferred_strategy)]
-                            self.ensure_team_tire_difference(car)
-                            car.pit_stops += 1
-                            car.tire_age = 0
-                    
-                    if car.in_pit:
-                        car.pit_time_remaining -= 0.1  # Simulate pit time
-                        if car.pit_time_remaining <= 0:
-                            car.in_pit = False
-                    
-                    car.lap_time = self.calculate_lap_time(car)
-                    car.total_race_time += car.lap_time
-            
-            # Overtaking
-            for i, car in enumerate(self.cars[:-1]):
-                if car.dnf:
-                    continue
-                next_car = self.cars[i+1]
-                if not next_car.dnf:
-                    if random.random() < self.calculate_overtake_probability(car, next_car):
-                        car.position, next_car.position = next_car.position, car.position
-                        print(f"\n⚡ Overtake: {car.driver.name} passes {next_car.driver.name}")
-            
-            # Display positions
-            sorted_cars = sorted(self.cars, key=lambda x: x.total_race_time if not x.dnf else float('inf'))
-            print("\nPositions:")
-            leader_time = sorted_cars[0].total_race_time
-            for pos, car in enumerate(sorted_cars, 1):
-                gap = car.total_race_time - leader_time
-                status = "DNF - " + car.dnf_reason if car.dnf else ("IN PIT" if car.in_pit else f"{car.current_tire['name']}")
-                print(f"{pos}. {car.driver.name:15} | +{gap:.3f}s | {status} ({car.tire_age} laps)")
+            for sector in range(1, 4):
+                print(f"\nSector {sector}:")
+                for car in self.cars:  # Process all cars, including DNF
+                    if not car.dnf:
+                        sector_time = self.calculate_sector_time(car, sector)
+                        if sector == 1:
+                            car.sector1_time = sector_time
+                        elif sector == 2:
+                            car.sector2_time = sector_time
+                        else:
+                            car.sector3_time = sector_time
+                            car.last_lap = car.sector1_time + car.sector2_time + car.sector3_time
+                            car.total_race_time += car.last_lap
+                        
+                        if car.in_pit:
+                            self.handle_pit_stop(car)
+                            
+                        if random.random() < 0.005:  # DNF chance
+                            car.dnf = True
+                            car.dnf_reason = random.choice(["Engine", "Gearbox", "Collision", "Hydraulics"])
+                            print(f"⚠️ DNF: {car.driver.name} - {car.dnf_reason}")
+                
+                # Display all cars
+                print("\nPositions:")
+                all_cars = sorted(self.cars, key=lambda x: float('inf') if x.dnf else x.total_race_time)
+                leader_time = next((car.total_race_time for car in all_cars if not car.dnf), 0)
+                
+                for pos, car in enumerate(all_cars, 1):
+                    status = f"DNF - {car.dnf_reason}" if car.dnf else ("IN PIT" if car.in_pit else car.current_tire["name"])
+                    gap = "DNF" if car.dnf else f"+{car.total_race_time - leader_time:.3f}s"
+                    sector_time = getattr(car, f"sector{sector}_time", 0.0)
+                    print(f"{pos}. {car.driver.name:15} | S{sector}: {sector_time:.3f} | Gap: {gap} | {status} ({car.tire_age})")
+                
+                time.sleep(1)
             
             time.sleep(2)
             clear_console()
