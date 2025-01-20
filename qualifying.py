@@ -14,37 +14,16 @@ YELLOW = '\033[93m'
 RED = '\033[91m'
 RESET = '\033[0m'
 
-class RaceStatus(Enum):
-    GREEN = "🟢 Racing"
-    YELLOW = "🟡 Yellow Flag"
-    SC = "🚨 Safety Car"
-    VSC = "🟡 Virtual Safety Car"
-    RED = "🔴 Red Flag"
-
 class Weather(Enum):
     DRY = "Dry"
     LIGHT_RAIN = "Light Rain"
     HEAVY_RAIN = "Heavy Rain"
 
-class TeamPerformance:
-    FACTORS = {
-        "Red Bull": {"S1": 0.96, "S2": 0.92, "S3": 0.97, "base": 0.96},
-        "Mercedes": {"S1": 0.99, "S2": 0.98, "S3": 0.98, "base": 0.93},
-        "Ferrari": {"S1": 0.98, "S2": 0.92, "S3": 0.99, "base": 0.91},
-        "McLaren": {"S1": 0.90, "S2": 0.91, "S3": 0.94, "base": 0.91},
-        "Aston Martin": {"S1": 1.00, "S2": 1.00, "S3": 1.00, "base": 0.98},
-        "Alpine": {"S1": 1.01, "S2": 1.01, "S3": 1.01, "base": 0.99},
-        "Williams": {"S1": 1.02, "S2": 1.02, "S3": 1.02, "base": 1.00},
-        "AlphaTauri": {"S1": 1.03, "S2": 1.03, "S3": 1.03, "base": 1.01},
-        "Alfa Romeo": {"S1": 1.04, "S2": 1.04, "S3": 1.04, "base": 1.02},
-        "Haas": {"S1": 1.05, "S2": 1.05, "S3": 1.05, "base": 1.03}
-    }
 
-@dataclass
-class Sector:
-    time: float = 0.0
-    personal_best: float = float('inf')
-    session_best: float = float('inf')
+class TireCompound:
+    SOFT = {"name": "Soft", "pace": +0.180, "color": "\033[31m"}    # Red
+    MEDIUM = {"name": "Medium", "pace": +0.200, "color": "\033[33m"}      # Yellow
+    HARD = {"name": "Hard", "pace": +0.361, "color": "\033[37m"}     # White
 
 @dataclass
 class Driver:
@@ -52,194 +31,221 @@ class Driver:
     number: int
     team: str
     skill: float
-    wet_skill: float
-    aggression: float
-    tire_management: float
-    sectors: List[Sector] = field(default_factory=lambda: [Sector() for _ in range(3)])
-    fastest_lap: float = float('inf')
-    current_lap_time: float = 0.0
+    sector1: float = 0.0
+    sector2: float = 0.0
+    sector3: float = 0.0
+    lap_time: float = float('inf')
+    personal_best_s1: float = float('inf')
+    personal_best_s2: float = float('inf')
+    personal_best_s3: float = float('inf')
+    personal_best_lap: float = float('inf')
+    current_tire: Dict = field(default_factory=lambda: TireCompound.HARD)
     status: str = "In Garage"
+    has_run: bool = False
 
-@dataclass
-class QualifyingSession:
-    name: str
-    duration: int
-    remaining_time: float
-    eliminated_positions: List[int]
+def format_sector_time(seconds: float) -> str:
+    if seconds == 0.0 or seconds == float('inf'):
+        return "No Time"
+    return f"{seconds:.3f}"
+
+def format_laptime(seconds: float) -> str:
+    if seconds == float('inf'):
+        return "No Time"
+    minutes = int(seconds // 60)
+    seconds_part = seconds % 60
+    return f"{minutes}:{seconds_part:06.3f}"
 
 class F1Simulator:
     def __init__(self):
         self.circuit_name = "Marina Bay Street Circuit"
         self.weather = Weather.DRY
-        self.base_laptime = 98.0
-        self.session_best_sectors = [float('inf')] * 3
-        self.session_best_lap = float('inf')
+        self.base_time = 100.015  # Target 1:30.015
+        self.current_session = "Q1"
+        self.reset_session_bests()
         
-        self.sessions = {
-            "Q1": QualifyingSession("Q1", 18, 18*60, list(range(16, 21))),
-            "Q2": QualifyingSession("Q2", 15, 15*60, list(range(11, 16))),
-            "Q3": QualifyingSession("Q3", 12, 12*60, [])
+        self.team_performance = {
+            "Red Bull": 0.95,     # Top team
+            "Ferrari": 0.95,      # Top team
+            "Mercedes": 0.95,     # Top team
+            "McLaren": 0.95,      # Top team
+            "Aston Martin": 1.00, # Midfield
+            "Alpine": 1.09,       # Midfield
+            "Williams": 1.00,     # Midfield
+            "AlphaTauri": 1.00,   # Back of grid
+            "Alfa Romeo": 1.00,   # Back of grid
+            "Haas": 0.99         # Back of grid
         }
         
         self.drivers = [
-            Driver("Max Verstappen", 1, "Red Bull", 0.98, 0.95, 0.90, 0.92),
-            Driver("Sergio Perez", 11, "Red Bull", 0.94, 0.88, 0.85, 0.90),
-            Driver("Lewis Hamilton", 44, "Mercedes", 0.97, 0.96, 0.97, 0.94),
-            Driver("George Russell", 63, "Mercedes", 0.95, 0.92, 0.87, 0.93),
-            Driver("Charles Leclerc", 16, "Ferrari", 0.96, 0.93, 0.89, 0.91),
-            Driver("Carlos Sainz", 55, "Ferrari", 0.94, 0.91, 0.86, 0.90),
-            Driver("Lando Norris", 4, "McLaren", 0.93, 0.90, 0.90, 0.89),
-            Driver("Oscar Piastri", 81, "McLaren", 0.91, 0.88, 0.88, 0.89),
-            Driver("Fernando Alonso", 14, "Aston Martin", 0.95, 0.94, 0.89, 0.93),
-            Driver("Lance Stroll", 18, "Aston Martin", 0.90, 0.87, 0.85, 0.86),
-            Driver("Pierre Gasly", 10, "Alpine", 0.92, 0.89, 0.86, 0.88),
-            Driver("Esteban Ocon", 31, "Alpine", 0.91, 0.88, 0.85, 0.87),
-            Driver("Alex Albon", 23, "Williams", 0.90, 0.87, 0.84, 0.86),
-            Driver("Logan Sargeant", 2, "Williams", 0.88, 0.85, 0.83, 0.84),
-            Driver("Yuki Tsunoda", 22, "AlphaTauri", 0.89, 0.86, 0.85, 0.85),
-            Driver("Daniel Ricciardo", 3, "AlphaTauri", 0.91, 0.88, 0.86, 0.88),
-            Driver("Valtteri Bottas", 77, "Alfa Romeo", 0.90, 0.87, 0.84, 0.86),
-            Driver("Zhou Guanyu", 24, "Alfa Romeo", 0.89, 0.86, 0.83, 0.85),
-            Driver("Kevin Magnussen", 20, "Haas", 0.89, 0.86, 0.85, 0.84),
-            Driver("Nico Hulkenberg", 27, "Haas", 0.90, 0.87, 0.84, 0.85)
+            Driver("Max Verstappen", 1, "Red Bull", 0.955),       # Slightly increased
+            Driver("Sergio Perez", 11, "Red Bull", 0.99),        # Increased 
+            Driver("Charles Leclerc", 16, "Ferrari", 0.88),      # Increased
+            Driver("Carlos Sainz", 55, "Ferrari", 0.85),         # Swapped with Albon
+            Driver("Lewis Hamilton", 44, "Mercedes", 0.87),      # Swapped with Alonso
+            Driver("George Russell", 63, "Mercedes", 0.96),
+            Driver("Lando Norris", 4, "McLaren", 0.93),
+            Driver("Oscar Piastri", 81, "McLaren", 0.96),
+            Driver("Fernando Alonso", 14, "Aston Martin", 0.98), # Swapped with Hamilton
+            Driver("Lance Stroll", 18, "Aston Martin", 0.96),
+            Driver("Pierre Gasly", 10, "Alpine", 0.91),
+            Driver("Esteban Ocon", 31, "Alpine", 0.94),
+            Driver("Alex Albon", 23, "Williams", 0.96),         # Swapped with Sainz
+            Driver("Logan Sargeant", 2, "Williams", 0.94),
+            Driver("Yuki Tsunoda", 22, "AlphaTauri", 0.92),
+            Driver("Daniel Ricciardo", 3, "AlphaTauri", 0.93),
+            Driver("Valtteri Bottas", 77, "Alfa Romeo", 0.93),
+            Driver("Zhou Guanyu", 24, "Alfa Romeo", 0.92),      
+            Driver("Kevin Magnussen", 20, "Haas", 0.98),        
+            Driver("Nico Hulkenberg", 27, "Haas", 0.93)
         ]
 
-    def simulate_sector_time(self, driver: Driver, sector: int) -> float:
-        base_time = self.base_laptime / 3
-        team_factor = TeamPerformance.FACTORS[driver.team][f"S{sector}"]
-        skill_factor = 1 - ((driver.skill - 0.8) * 0.5)
-        random_factor = random.uniform(-0.2, 0.2) * driver.skill
-        
-        sector_time = base_time * team_factor * skill_factor + random_factor
-        
-        if sector_time < driver.sectors[sector-1].personal_best:
-            driver.sectors[sector-1].personal_best = sector_time
-        
-        if sector_time < self.session_best_sectors[sector-1]:
-            self.session_best_sectors[sector-1] = sector_time
-            
-        return sector_time
+    def reset_session_bests(self):
+        self.session_best = {
+            'S1': float('inf'),
+            'S2': float('inf'),
+            'S3': float('inf'),
+            'lap': float('inf')
+        }
 
-    def format_sector_time(self, time: float, personal_best: float, session_best: float) -> str:
-        if time == 0.0:
-            return f"{YELLOW}No Time{RESET}"
+    def format_time(self, time: float, personal_best: float, session_best: float) -> str:
+        if time == 0.0 or time == float('inf'):
+            return "No Time"
+        
+        time_str = format_sector_time(time)
         if abs(time - session_best) < 0.001:
-            return f"{PURPLE}{time:.3f}{RESET}"
+            return f"{PURPLE}{time_str}{RESET}"
         if abs(time - personal_best) < 0.001:
-            return f"{GREEN}{time:.3f}{RESET}"
-        return f"{time:.3f}"
+            return f"{GREEN}{time_str}{RESET}"
+        return f"{YELLOW}{time_str}{RESET}"
 
-    def display_qualifying_status(self, session: str, drivers: List[Driver]):
+    def simulate_sector(self, driver: Driver, sector: int) -> float:
+        base = self.base_time / 3
+        team_factor = self.team_performance[driver.team]
+        skill_factor = driver.skill
+        tire_factor = 1 + driver.current_tire['pace']
+        random_factor = random.uniform(-0.2, 0.2)
+        
+        time = base * team_factor * skill_factor * tire_factor + random_factor
+        
+        if time < getattr(driver, f'personal_best_s{sector}'):
+            setattr(driver, f'personal_best_s{sector}', time)
+        
+        if time < self.session_best[f'S{sector}']:
+            self.session_best[f'S{sector}'] = time
+            
+        return time
+
+    def display_timing(self, drivers: List[Driver]):
         clear_console()
-        print(f"\n{session} - {self.circuit_name}")
+        print(f"\nQualifying - {self.circuit_name}")
         print(f"Weather: {self.weather.value}")
-        print(f"Time Remaining: {self.sessions[session].remaining_time/60:.1f} minutes")
-        print("\nPos  Driver          S1      S2      S3      Time     Status")
-        print("-" * 65)
-
-        sorted_drivers = sorted(drivers, key=lambda d: d.fastest_lap)
+        print(f"Session: {self.current_session}\n")
+        print("Pos  Driver          S1      S2      S3      Time     Tire    Status")
+        print("-" * 80)
+        
+        sorted_drivers = sorted(drivers, key=lambda x: x.lap_time)
+        
         for pos, driver in enumerate(sorted_drivers, 1):
-            s1 = self.format_sector_time(driver.sectors[0].time,
-                                       driver.sectors[0].personal_best,
-                                       self.session_best_sectors[0])
-            s2 = self.format_sector_time(driver.sectors[1].time,
-                                       driver.sectors[1].personal_best,
-                                       self.session_best_sectors[1])
-            s3 = self.format_sector_time(driver.sectors[2].time,
-                                       driver.sectors[2].personal_best,
-                                       self.session_best_sectors[2])
+            s1 = self.format_time(driver.sector1, driver.personal_best_s1, self.session_best['S1'])
+            s2 = self.format_time(driver.sector2, driver.personal_best_s2, self.session_best['S2'])
+            s3 = self.format_time(driver.sector3, driver.personal_best_s3, self.session_best['S3'])
             
-            lap_time = driver.fastest_lap
-            if lap_time == float('inf'):
-                lap_time_str = "No Time"
+            if driver.has_run:
+                time_str = format_laptime(driver.lap_time)
             else:
-                lap_time_str = f"{lap_time:.3f}"
-            
-            print(f"{pos:2d}.  {driver.name:<14} {s1:>7} {s2:>7} {s3:>7} {lap_time_str:>8} {driver.status:>10}")
+                time_str = "No Time"
+                
+            tire_str = f"{driver.current_tire['color']}{driver.current_tire['name']}{RESET}"
+            print(f"{pos:2d}.  {driver.name:<14} {s1:>7} {s2:>7} {s3:>7} {time_str:>10} {tire_str:>8} {driver.status:>8}")
 
-    def run_session(self, session_name: str, drivers: List[Driver]):
-        session_time = self.sessions[session_name].remaining_time
+    def run_session(self, name: str, drivers: List[Driver], cutoff: int) -> List[Driver]:
+        self.current_session = name
+        print(f"\n{name} Session Start")
         
-        while session_time > 0:
-            for driver in drivers:
-                if random.random() < 0.3:  # 30% chance of doing a lap
-                    driver.status = "Out Lap"
-                    self.display_qualifying_status(session_name, drivers)
-                    time.sleep(0.5)
-                    
-                    driver.status = "Flying Lap"
-                    current_lap = 0
-                    for sector in range(3):
-                        sector_time = self.simulate_sector_time(driver, sector + 1)
-                        driver.sectors[sector].time = sector_time
-                        current_lap += sector_time
-                        self.display_qualifying_status(session_name, drivers)
-                        time.sleep(0.5)
-                    
-                    if current_lap < driver.fastest_lap:
-                        driver.fastest_lap = current_lap
-                    
-                    driver.status = "In Lap"
-                    self.display_qualifying_status(session_name, drivers)
-                    time.sleep(0.5)
-                    
-                driver.status = "In Garage"
+        for driver in drivers:
+            driver.status = "Out Lap"
+            driver.sector1 = 0.0
+            driver.sector2 = 0.0
+            driver.sector3 = 0.0
+            driver.lap_time = float('inf')
+            self.display_timing(drivers)
+            time.sleep(1)
             
-            session_time -= 5
-            self.display_qualifying_status(session_name, drivers)
-            time.sleep(0.5)
+            driver.status = "Flying Lap"
+            
+            # Sectors
+            driver.sector1 = self.simulate_sector(driver, 1)
+            self.display_timing(drivers)
+            time.sleep(1)
+            
+            driver.sector2 = self.simulate_sector(driver, 2)
+            self.display_timing(drivers)
+            time.sleep(1)
+            
+            driver.sector3 = self.simulate_sector(driver, 3)
+            driver.lap_time = driver.sector1 + driver.sector2 + driver.sector3
+            
+            if driver.lap_time < driver.personal_best_lap:
+                driver.personal_best_lap = driver.lap_time
+            
+            if driver.lap_time < self.session_best['lap']:
+                self.session_best['lap'] = driver.lap_time
+            
+            driver.has_run = True
+            driver.status = "In Garage"
+            self.display_timing(drivers)
+            time.sleep(1)
+        
+        drivers.sort(key=lambda x: x.lap_time)
+        eliminated = drivers[cutoff:]
+        if eliminated:
+            print(f"\nEliminated from {name}:")
+            for pos, driver in enumerate(eliminated, cutoff + 1):
+                print(f"{pos}. {driver.name:<15} {format_laptime(driver.lap_time)}")
+        return drivers[:cutoff]
 
-    def conduct_qualifying(self):
-        print("\nQualifying Session Start")
+    def display_final_classification(self):
+        print("\nFinal Qualifying Classification:")
+        print("-" * 80)
         
-        # Q1 - All drivers
-        print("\nQ1 Session - Eliminating positions 16-20")
-        active_drivers = self.drivers.copy()
-        self.run_session("Q1", active_drivers)
-        active_drivers.sort(key=lambda d: d.fastest_lap)
-        eliminated = active_drivers[15:]
-        active_drivers = active_drivers[:15]
+        # All results for all drivers (Q1-Q3)
+        all_drivers = self.drivers
         
-        print("\nQ1 Eliminated:")
-        for pos, driver in enumerate(eliminated, 16):
-            print(f"{pos}. {driver.name:<15} {driver.fastest_lap:.3f}")
-        time.sleep(3)
+        # Sort drivers by their final lap time
+        all_drivers.sort(key=lambda x: x.lap_time)
         
-        # Q2 - Top 15 drivers
-        print("\nQ2 Session - Eliminating positions 11-15")
-        self.run_session("Q2", active_drivers)
-        active_drivers.sort(key=lambda d: d.fastest_lap)
-        eliminated_q2 = active_drivers[10:]
-        active_drivers = active_drivers[:10]
+        for pos, driver in enumerate(all_drivers, 1):
+            gap = f"+{(driver.lap_time - all_drivers[0].lap_time):.3f}" if pos > 1 else "POLE"
+            print(f"{pos:2d}. {driver.name:<15} {format_laptime(driver.lap_time)} {gap:>8}")
+
+    def run_qualifying(self):
+        print(f"\nQualifying Session - {self.circuit_name}")
         
-        print("\nQ2 Eliminated:")
-        for pos, driver in enumerate(eliminated_q2, 11):
-            print(f"{pos}. {driver.name:<15} {driver.fastest_lap:.3f}")
-        time.sleep(3)
+        # Q1 - Hard tires
+        print("\nQ1 Session - Hard Tires")
+        for driver in self.drivers:
+            driver.current_tire = TireCompound.HARD
+        q2_drivers = self.run_session("Q1", self.drivers.copy(), 15)
+        self.reset_session_bests()
+        time.sleep(2)
         
-        # Q3 - Top 10 shootout
-        print("\nQ3 Session - Final Qualifying")
-        self.run_session("Q3", active_drivers)
-        active_drivers.sort(key=lambda d: d.fastest_lap)
+        # Q2 - Medium tires
+        print("\nQ2 Session - Medium Tires")
+        for driver in q2_drivers:
+            driver.current_tire = TireCompound.MEDIUM
+        q3_drivers = self.run_session("Q2", q2_drivers, 10)
+        self.reset_session_bests()
+        time.sleep(2)
         
-        print("\nFinal Grid:")
-        print("Pos  Driver          Time     Gap")
-        print("-" * 40)
+        # Q3 - Soft tires
+        print("\nQ3 Session - Soft Tires")
+        for driver in q3_drivers:
+            driver.current_tire = TireCompound.SOFT
+        final_order = self.run_session("Q3", q3_drivers, 10)
         
-        # Print top 10
-        pole_time = active_drivers[0].fastest_lap
-        for pos, driver in enumerate(active_drivers, 1):
-            gap = f"+{(driver.fastest_lap - pole_time):.3f}" if pos > 1 else "POLE"
-            print(f"{pos:2d}.  {driver.name:<15} {driver.fastest_lap:.3f}  {gap}")
-        
-        # Print 11-15
-        for pos, driver in enumerate(eliminated_q2, 11):
-            print(f"{pos:2d}.  {driver.name:<15} {driver.fastest_lap:.3f}")
-        
-        # Print 16-20
-        for pos, driver in enumerate(eliminated, 16):
-            print(f"{pos:2d}.  {driver.name:<15} {driver.fastest_lap:.3f}")
+        # Display final classification
+        self.display_final_classification()
 
 if __name__ == "__main__":
     sim = F1Simulator()
-    sim.conduct_qualifying()
+    sim.run_qualifying()

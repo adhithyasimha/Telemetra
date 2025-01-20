@@ -37,6 +37,7 @@ class TeamPerformance:
         "AlphaTauri": {"S1": 1.03, "S2": 1.03, "S3": 1.03, "base": 1.01},
         "Alfa Romeo": {"S1": 1.04, "S2": 1.04, "S3": 1.04, "base": 1.02},
         "Haas": {"S1": 1.05, "S2": 1.05, "S3": 1.05, "base": 1.03}
+
     }
 
 @dataclass
