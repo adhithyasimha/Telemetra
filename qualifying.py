@@ -21,9 +21,9 @@ class Weather(Enum):
 
 
 class TireCompound:
-    SOFT = {"name": "Soft", "pace": +0.180, "color": "\033[31m"}    # Red
-    MEDIUM = {"name": "Medium", "pace": +0.200, "color": "\033[33m"}      # Yellow
-    HARD = {"name": "Hard", "pace": +0.361, "color": "\033[37m"}     # White
+    SOFT = {"name": "Soft", "pace": +0.180, "color": "\033[31m"}
+    MEDIUM = {"name": "Medium", "pace": +0.200, "color": "\033[33m"}
+    HARD = {"name": "Hard", "pace": +0.361, "color": "\033[37m"}
 
 @dataclass
 class Driver:
@@ -59,43 +59,43 @@ class F1Simulator:
     def __init__(self):
         self.circuit_name = "Marina Bay Street Circuit"
         self.weather = Weather.DRY
-        self.base_time = 100.015  # Target 1:30.015
+        self.base_time = 100.015
         self.current_session = "Q1"
         self.reset_session_bests()
         
         self.team_performance = {
-            "Red Bull": 0.95,     # Top team
-            "Ferrari": 0.95,      # Top team
-            "Mercedes": 0.95,     # Top team
-            "McLaren": 0.95,      # Top team
-            "Aston Martin": 1.00, # Midfield
-            "Alpine": 1.09,       # Midfield
-            "Williams": 1.00,     # Midfield
-            "AlphaTauri": 1.00,   # Back of grid
-            "Alfa Romeo": 1.00,   # Back of grid
-            "Haas": 0.99         # Back of grid
+            "Red Bull": 0.95,
+            "Ferrari": 0.95,
+            "Mercedes": 0.95,
+            "McLaren": 0.95,
+            "Aston Martin": 1.00,
+            "Alpine": 1.09,
+            "Williams": 1.00,
+            "AlphaTauri": 1.00,
+            "Alfa Romeo": 1.00,
+            "Haas": 0.99
         }
         
         self.drivers = [
-            Driver("Max Verstappen", 1, "Red Bull", 0.955),       # Slightly increased
-            Driver("Sergio Perez", 11, "Red Bull", 0.99),        # Increased 
-            Driver("Charles Leclerc", 16, "Ferrari", 0.88),      # Increased
-            Driver("Carlos Sainz", 55, "Ferrari", 0.85),         # Swapped with Albon
-            Driver("Lewis Hamilton", 44, "Mercedes", 0.87),      # Swapped with Alonso
+            Driver("Max Verstappen", 1, "Red Bull", 0.955),
+            Driver("Sergio Perez", 11, "Red Bull", 0.99),
+            Driver("Charles Leclerc", 16, "Ferrari", 0.88),
+            Driver("Carlos Sainz", 55, "Ferrari", 0.85),
+            Driver("Lewis Hamilton", 44, "Mercedes", 0.87),
             Driver("George Russell", 63, "Mercedes", 0.96),
             Driver("Lando Norris", 4, "McLaren", 0.93),
             Driver("Oscar Piastri", 81, "McLaren", 0.96),
-            Driver("Fernando Alonso", 14, "Aston Martin", 0.98), # Swapped with Hamilton
+            Driver("Fernando Alonso", 14, "Aston Martin", 0.98),
             Driver("Lance Stroll", 18, "Aston Martin", 0.96),
             Driver("Pierre Gasly", 10, "Alpine", 0.91),
             Driver("Esteban Ocon", 31, "Alpine", 0.94),
-            Driver("Alex Albon", 23, "Williams", 0.96),         # Swapped with Sainz
+            Driver("Alex Albon", 23, "Williams", 0.96),
             Driver("Logan Sargeant", 2, "Williams", 0.94),
             Driver("Yuki Tsunoda", 22, "AlphaTauri", 0.92),
             Driver("Daniel Ricciardo", 3, "AlphaTauri", 0.93),
             Driver("Valtteri Bottas", 77, "Alfa Romeo", 0.93),
-            Driver("Zhou Guanyu", 24, "Alfa Romeo", 0.92),      
-            Driver("Kevin Magnussen", 20, "Haas", 0.98),        
+            Driver("Zhou Guanyu", 24, "Alfa Romeo", 0.92),
+            Driver("Kevin Magnussen", 20, "Haas", 0.98),
             Driver("Nico Hulkenberg", 27, "Haas", 0.93)
         ]
 
@@ -173,7 +173,6 @@ class F1Simulator:
             
             driver.status = "Flying Lap"
             
-            # Sectors
             driver.sector1 = self.simulate_sector(driver, 1)
             self.display_timing(drivers)
             time.sleep(1)
@@ -208,10 +207,8 @@ class F1Simulator:
         print("\nFinal Qualifying Classification:")
         print("-" * 80)
         
-        # All results for all drivers (Q1-Q3)
         all_drivers = self.drivers
         
-        # Sort drivers by their final lap time
         all_drivers.sort(key=lambda x: x.lap_time)
         
         for pos, driver in enumerate(all_drivers, 1):
@@ -221,7 +218,6 @@ class F1Simulator:
     def run_qualifying(self):
         print(f"\nQualifying Session - {self.circuit_name}")
         
-        # Q1 - Hard tires
         print("\nQ1 Session - Hard Tires")
         for driver in self.drivers:
             driver.current_tire = TireCompound.HARD
@@ -229,7 +225,6 @@ class F1Simulator:
         self.reset_session_bests()
         time.sleep(2)
         
-        # Q2 - Medium tires
         print("\nQ2 Session - Medium Tires")
         for driver in q2_drivers:
             driver.current_tire = TireCompound.MEDIUM
@@ -237,13 +232,11 @@ class F1Simulator:
         self.reset_session_bests()
         time.sleep(2)
         
-        # Q3 - Soft tires
         print("\nQ3 Session - Soft Tires")
         for driver in q3_drivers:
             driver.current_tire = TireCompound.SOFT
         final_order = self.run_session("Q3", q3_drivers, 10)
         
-        # Display final classification
         self.display_final_classification()
 
 if __name__ == "__main__":
