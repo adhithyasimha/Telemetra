@@ -1,9 +1,12 @@
 import random
 import time
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List
 from enum import Enum
 import os
+from kafka import KafkaProducer
+from datetime import datetime
 
 def clear_console():
     os.system('clear')
@@ -18,7 +21,6 @@ class Weather(Enum):
     DRY = "Dry"
     LIGHT_RAIN = "Light Rain"
     HEAVY_RAIN = "Heavy Rain"
-
 
 class TireCompound:
     SOFT = {"name": "Soft", "pace": +0.180, "color": "\033[31m"}
@@ -43,6 +45,21 @@ class Driver:
     status: str = "In Garage"
     has_run: bool = False
 
+@dataclass
+class QualifyingMessage:
+    session_name: str
+    circuit_name: str
+    weather: str
+    timestamp: str
+    drivers: List[Dict]
+
+@dataclass
+class GridPositionMessage:
+    circuit_name: str
+    timestamp: str
+    grid_positions: List[Dict]
+    pole_time: float
+
 def format_sector_time(seconds: float) -> str:
     if seconds == 0.0 or seconds == float('inf'):
         return "No Time"
@@ -62,6 +79,11 @@ class F1Simulator:
         self.base_time = 100.015
         self.current_session = "Q1"
         self.reset_session_bests()
+        
+        self.producer = KafkaProducer(
+            bootstrap_servers=['localhost:9092'],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
         
         self.team_performance = {
             "Red Bull": 0.95,
@@ -98,6 +120,46 @@ class F1Simulator:
             Driver("Kevin Magnussen", 20, "Haas", 0.98),
             Driver("Nico Hulkenberg", 27, "Haas", 0.93)
         ]
+
+    def send_to_kafka(self, drivers: List[Driver]):
+        message = QualifyingMessage(
+            session_name=self.current_session,
+            circuit_name=self.circuit_name,
+            weather=self.weather.value,
+            timestamp=datetime.now().isoformat(),
+            drivers=[{
+                'name': d.name,
+                'team': d.team,
+                'number': d.number,
+                'sector1': d.sector1,
+                'sector2': d.sector2,
+                'sector3': d.sector3,
+                'lap_time': d.lap_time,
+                'status': d.status,
+                'tire': d.current_tire['name']
+            } for d in drivers]
+        )
+        
+        self.producer.send('quali', asdict(message))
+        self.producer.flush()
+
+    def send_grid_positions(self, drivers: List[Driver]):
+        message = GridPositionMessage(
+            circuit_name=self.circuit_name,
+            timestamp=datetime.now().isoformat(),
+            grid_positions=[{
+                'position': idx + 1,
+                'name': driver.name,
+                'team': driver.team,
+                'number': driver.number,
+                'lap_time': format_laptime(driver.lap_time),
+                'gap_to_pole': f"+{(driver.lap_time - drivers[0].lap_time):.3f}" if idx > 0 else "POLE"
+            } for idx, driver in enumerate(drivers)],
+            pole_time=drivers[0].lap_time
+        )
+        
+        self.producer.send('grid', asdict(message))
+        self.producer.flush()
 
     def reset_session_bests(self):
         self.session_best = {
@@ -169,16 +231,19 @@ class F1Simulator:
             driver.sector3 = 0.0
             driver.lap_time = float('inf')
             self.display_timing(drivers)
+            self.send_to_kafka(drivers)
             time.sleep(1)
             
             driver.status = "Flying Lap"
             
             driver.sector1 = self.simulate_sector(driver, 1)
             self.display_timing(drivers)
+            self.send_to_kafka(drivers)
             time.sleep(1)
             
             driver.sector2 = self.simulate_sector(driver, 2)
             self.display_timing(drivers)
+            self.send_to_kafka(drivers)
             time.sleep(1)
             
             driver.sector3 = self.simulate_sector(driver, 3)
@@ -193,6 +258,7 @@ class F1Simulator:
             driver.has_run = True
             driver.status = "In Garage"
             self.display_timing(drivers)
+            self.send_to_kafka(drivers)
             time.sleep(1)
         
         drivers.sort(key=lambda x: x.lap_time)
@@ -208,12 +274,14 @@ class F1Simulator:
         print("-" * 80)
         
         all_drivers = self.drivers
-        
         all_drivers.sort(key=lambda x: x.lap_time)
         
         for pos, driver in enumerate(all_drivers, 1):
             gap = f"+{(driver.lap_time - all_drivers[0].lap_time):.3f}" if pos > 1 else "POLE"
             print(f"{pos:2d}. {driver.name:<15} {format_laptime(driver.lap_time)} {gap:>8}")
+        
+        # Send final grid positions to 'grid' topic
+        self.send_grid_positions(all_drivers)
 
     def run_qualifying(self):
         print(f"\nQualifying Session - {self.circuit_name}")
@@ -238,6 +306,11 @@ class F1Simulator:
         final_order = self.run_session("Q3", q3_drivers, 10)
         
         self.display_final_classification()
+
+    def __del__(self):
+        """Cleanup Kafka producer on deletion"""
+        if hasattr(self, 'producer'):
+            self.producer.close()
 
 if __name__ == "__main__":
     sim = F1Simulator()
