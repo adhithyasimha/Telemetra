@@ -233,21 +233,26 @@ class F1Simulator:
             car.pit_stops += 1
 
     def check_incidents(self, car: Car) -> bool:
-        if self.dnf_count >= self.max_dnf or car.dnf or random.random() > 0.001:
-            return False
+    # Skip incident check for Carlos Sainz (car #55)
+     if car.driver.number == 55:
+        return False
 
-        car.dnf = True
-        car.dnf_lap = self.current_lap
-        car.dnf_reason = random.choice(["Engine", "Gearbox", "Collision", "Hydraulics"])
-        self.dnf_count += 1
+     if self.dnf_count >= self.max_dnf or car.dnf or random.random() > 0.001:
+        return False
 
-        if not self.safety_car and random.random() < 0.7:
-            self.safety_car = True
-            self.safety_car_laps = 5
-            self.race_status = RaceStatus.SC
-            print(f"\n\U0001F4A5 Incident: {car.driver.name} - {car.dnf_reason}")
-            print("\U0001F6A8 Safety Car Deployed")
-        return True
+     car.dnf = True
+     car.dnf_lap = self.current_lap
+     car.dnf_reason = random.choice(["Engine", "Gearbox", "Collision", "Hydraulics"])
+     self.dnf_count += 1
+
+     if not self.safety_car and random.random() < 0.7:
+        self.safety_car = True
+        self.safety_car_laps = 5
+        self.race_status = RaceStatus.SC
+        print(f"\n\U0001F4A5 Incident: {car.driver.name} - {car.dnf_reason}")
+        print("\U0001F6A8 Safety Car Deployed")
+     return True
+
 
     def handle_overtakes(self, all_cars):
         for i in range(len(all_cars) - 1):
