@@ -1,19 +1,22 @@
 import random
 import time
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List
 from enum import Enum
 import os
+from kafka import KafkaConsumer, KafkaProducer
+from datetime import datetime
 
 def clear_console():
     os.system('clear')
 
 class RaceStatus(Enum):
-    GREEN = "\U0001F7E2 Racing"
-    YELLOW = "\U0001F7E1 Yellow Flag"
-    SC = "\U0001F6A8 Safety Car"
-    VSC = "\U0001F7E1 Virtual Safety Car"
-    RED = "\U0001F534 Red Flag"
+    GREEN = "Racing"
+    YELLOW = "Yellow Flag"
+    SC = "Safety Car"
+    VSC = "Virtual Safety Car"
+    RED = "Red Flag"
 
 class Weather(Enum):
     DRY = "Dry"
@@ -21,9 +24,9 @@ class Weather(Enum):
     HEAVY_RAIN = "Heavy Rain"
 
 class TireCompound:
-    SOFT = {"name": "Soft (S)", "max_laps": 20, "pace_delta": -1.2, "wear_rate": 1.5, "color": "\033[31m"}  # Red
-    MEDIUM = {"name": "Medium (M)", "max_laps": 25, "pace_delta": 0, "wear_rate": 1.0, "color": "\033[33m"}  # Yellow
-    HARD = {"name": "Hard (H)", "max_laps": 30, "pace_delta": 0.8, "wear_rate": 0.7, "color": "\033[37m"}  # White
+    SOFT = {"name": "Soft (S)", "max_laps": 20, "pace_delta": -1.2, "wear_rate": 1.5, "color": "\033[31m"}
+    MEDIUM = {"name": "Medium (M)", "max_laps": 25, "pace_delta": 0, "wear_rate": 1.0, "color": "\033[33m"}
+    HARD = {"name": "Hard (H)", "max_laps": 30, "pace_delta": 0.8, "wear_rate": 0.7, "color": "\033[37m"}
 
 class TeamPerformance:
     FACTORS = {
@@ -37,7 +40,6 @@ class TeamPerformance:
         "AlphaTauri": {"S1": 1.03, "S2": 1.03, "S3": 1.03, "base": 1.01},
         "Alfa Romeo": {"S1": 1.04, "S2": 1.04, "S3": 1.04, "base": 1.02},
         "Haas": {"S1": 1.05, "S2": 1.05, "S3": 1.05, "base": 1.03}
-
     }
 
 @dataclass
@@ -49,6 +51,9 @@ class Driver:
     wet_skill: float
     aggression: float
     tire_management: float
+
+    def to_dict(self):
+        return asdict(self)
 
 @dataclass
 class Car:
@@ -63,15 +68,34 @@ class Car:
     last_lap: float = 0.0
     fastest_lap: float = float('inf')
     total_race_time: float = 0.0
-    pit_entry_time: float = 0.0
-    pit_stop_time: float = 0.0
-    pit_exit_time: float = 0.0
-    pit_phase: str = "none"  # none, entry, stop, exit
+    pit_phase: str = "none"
     pit_stops: int = 0
     dnf: bool = False
     dnf_reason: str = ""
     dnf_lap: int = 0
     race_status: str = "Running"
+
+    def to_dict(self):
+        car_dict = {
+            'position': self.position,
+            'gap_to_leader': self.gap_to_leader,
+            'current_tire': self.current_tire['name'],
+            'tire_age': self.tire_age,
+            'sector1_time': self.sector1_time,
+            'sector2_time': self.sector2_time,
+            'sector3_time': self.sector3_time,
+            'last_lap': self.last_lap,
+            'fastest_lap': self.fastest_lap if self.fastest_lap != float('inf') else None,
+            'total_race_time': self.total_race_time,
+            'pit_phase': self.pit_phase,
+            'pit_stops': self.pit_stops,
+            'dnf': self.dnf,
+            'dnf_reason': self.dnf_reason,
+            'dnf_lap': self.dnf_lap,
+            'race_status': self.race_status,
+            'driver': self.driver.to_dict()
+        }
+        return car_dict
 
     def update_status(self) -> str:
         if self.dnf:
@@ -82,23 +106,27 @@ class Car:
 
 class F1Simulator:
     def __init__(self):
-        self.circuit_name = "Marina Bay Street Circuit"
+        self.producer = KafkaProducer(
+            bootstrap_servers='localhost:9092',
+            value_serializer=lambda x: json.dumps(x).encode('utf-8')
+        )
+        self.drivers = self.consume_grid_from_kafka()
+        self.cars = [Car(driver) for driver in self.drivers]
         self.total_laps = 61
         self.current_lap = 0
         self.race_status = RaceStatus.GREEN
         self.safety_car = False
         self.safety_car_laps = 0
         self.weather = Weather.DRY
-        self.base_laptime = 98.0
         self.dnf_count = 0
         self.max_dnf = 2
         self.drs_enabled = False
         self.fastest_lap = {"time": float('inf'), "driver": None}
 
         self.pit_times = {
-            "entry": 13.5,  # Time to enter pit lane
-            "stop": 2.5,   # Base pit stop time
-            "exit": 15.0    # Time to exit pit lane
+            "entry": 13.5,
+            "stop": 2.5,
+            "exit": 15.0
         }
 
         self.team_pit_efficiency = {
@@ -114,16 +142,19 @@ class F1Simulator:
             "Haas": 1.15
         }
 
-        self.drivers = [
-            Driver("Max Verstappen", 1, "Red Bull", 0.98, 0.95, 0.90, 0.92),
-            Driver("Sergio Perez", 11, "Red Bull", 0.94, 0.88, 0.85, 0.90),
-            Driver("Lewis Hamilton", 44, "Mercedes", 0.97, 0.96, 0.93, 0.94),
-            Driver("George Russell", 63, "Mercedes", 0.95, 0.92, 0.87, 0.93),
-            Driver("Charles Leclerc", 16, "Ferrari", 0.96, 0.93, 0.89, 0.91),
-            Driver("Carlos Sainz", 55, "Ferrari", 0.94, 0.91, 0.86, 0.90),
-            Driver("Lando Norris", 4, "McLaren", 0.93, 0.90, 0.90, 0.89),
-            Driver("Oscar Piastri", 81, "McLaren", 0.91, 0.88, 0.88, 0.89),
-            Driver("Fernando Alonso", 14, "Aston Martin", 0.95, 0.94, 0.89, 0.93),
+        self.initialize_race()
+
+    def consume_grid_from_kafka(self):
+        drivers_pool = [
+            Driver("Max Verstappen", 1, "Red Bull", 0.92, 0.91, 0.90, 0.92),
+            Driver("Sergio Perez", 11, "Red Bull", 0.94, 0.90, 0.85, 0.90),
+            Driver("Lewis Hamilton", 44, "Mercedes", 0.97, 0.96, 0.98, 0.96),
+            Driver("George Russell", 63, "Mercedes", 0.95, 0.95, 0.95, 0.99),
+            Driver("Charles Leclerc", 16, "Ferrari", 0.96, 0.93, 0.93, 0.91),
+            Driver("Carlos Sainz", 55, "Ferrari", 0.98, 0.95, 0.96, 0.99),
+            Driver("Lando Norris", 4, "McLaren", 0.93, 0.90, 0.90, 0.92),
+            Driver("Oscar Piastri", 81, "McLaren", 0.91, 0.94, 0.93, 0.94),
+            Driver("Fernando Alonso", 14, "Aston Martin", 0.95, 0.94, 0.90, 0.93),
             Driver("Lance Stroll", 18, "Aston Martin", 0.90, 0.87, 0.85, 0.86),
             Driver("Pierre Gasly", 10, "Alpine", 0.92, 0.89, 0.86, 0.88),
             Driver("Esteban Ocon", 31, "Alpine", 0.91, 0.88, 0.85, 0.87),
@@ -136,9 +167,51 @@ class F1Simulator:
             Driver("Kevin Magnussen", 20, "Haas", 0.89, 0.86, 0.85, 0.84),
             Driver("Nico Hulkenberg", 27, "Haas", 0.90, 0.87, 0.84, 0.85)
         ]
+        driver_map = {driver.number: driver for driver in drivers_pool}
 
-        self.cars = [Car(driver) for driver in self.drivers]
-        self.initialize_race()
+        consumer = KafkaConsumer(
+            'grid',
+            bootstrap_servers='localhost:9092',
+            auto_offset_reset='earliest',
+            value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+        )
+        msg = next(consumer)
+        grid_data = msg.value
+
+        self.circuit_name = grid_data.get("circuit_name", "Unknown Circuit")
+        self.base_laptime = grid_data.get("pole_time", 95.0)
+
+        grid_order = [driver["number"] for driver in grid_data["grid_positions"]]
+        ordered_drivers = []
+        for number in grid_order:
+            driver = driver_map.get(number)
+            if driver:
+                ordered_drivers.append(driver)
+            else:
+                print(f"Driver number {number} not found in drivers pool.")
+        
+        return ordered_drivers
+
+    def send_race_update(self, sector_number=None):
+        race_data = {
+            'timestamp': datetime.now().isoformat(),
+            'circuit_name': self.circuit_name,
+            'current_lap': self.current_lap,
+            'total_laps': self.total_laps,
+            'race_status': self.race_status.value,
+            'weather': self.weather.value,
+            'safety_car': self.safety_car,
+            'drs_enabled': self.drs_enabled,
+            'sector': sector_number,
+            'cars': [car.to_dict() for car in sorted(self.cars, key=lambda x: float('inf') if x.dnf else x.total_race_time)],
+            'fastest_lap': {
+                'time': self.fastest_lap['time'] if self.fastest_lap['time'] != float('inf') else None,
+                'driver': self.fastest_lap['driver'].to_dict() if self.fastest_lap['driver'] else None
+            }
+        }
+        
+        self.producer.send('race', race_data)
+        self.producer.flush()
 
     def get_team_cars(self, team: str) -> List[Car]:
         return [car for car in self.cars if car.driver.team == team]
@@ -147,36 +220,22 @@ class F1Simulator:
         teams_processed = set()
         for i, car in enumerate(self.cars):
             car.position = i + 1
-            
             if car.driver.team not in teams_processed:
-                # First driver of team
                 car.current_tire = TireCompound.SOFT
                 teams_processed.add(car.driver.team)
             else:
-                # Second driver of team
                 car.current_tire = TireCompound.MEDIUM
 
     def should_pit(self, car: Car) -> bool:
-        # Get teammate's status
         teammate = next((c for c in self.get_team_cars(car.driver.team) if c != car), None)
-        
-        # Basic conditions for pitting
         tire_critical = car.tire_age >= (car.current_tire["max_laps"] - 1)
         teammate_in_pit = teammate and teammate.pit_phase != "none"
-        
-        # Don't pit if teammate is already in pit
-        if teammate_in_pit:
-            return False
-            
-        # Pit if tires are critical
-        if tire_critical:
-            return True
-            
-        return False
+        return tire_critical and not teammate_in_pit
 
     def display_race_banner(self):
         print("\n" + "=" * 80)
         print(f"Lap {self.current_lap}/{self.total_laps} | {self.race_status.value} | {self.weather.value}")
+        print(f"Circuit: {self.circuit_name} | Base Lap Time: {self.base_laptime:.3f}s")
         if self.safety_car:
             print("\U0001F6A8 Safety Car Period")
         if self.drs_enabled:
@@ -201,7 +260,6 @@ class F1Simulator:
 
         if self.safety_car:
             base_sector *= 1.4
-            # Compress field under safety car
             if car.position > 1:
                 base_sector *= 0.98
 
@@ -213,46 +271,37 @@ class F1Simulator:
             car.pit_phase = "entry"
         elif car.pit_phase == "entry":
             car.pit_phase = "stop"
-            
-            # Get teammate's tire compound
             teammate = next((c for c in self.get_team_cars(car.driver.team) if c != car), None)
-            teammate_compound = teammate.current_tire if teammate else None
-            
-            # Choose different compound than teammate
             available_compounds = [TireCompound.SOFT, TireCompound.MEDIUM, TireCompound.HARD]
-            if teammate_compound:
-                available_compounds.remove(teammate_compound)
-            
+            if teammate and teammate.current_tire in available_compounds:
+                available_compounds.remove(teammate.current_tire)
             car.current_tire = random.choice(available_compounds)
             car.tire_age = 0
-            
         elif car.pit_phase == "stop":
             car.pit_phase = "exit"
-        else:  # exit
+        else:
             car.pit_phase = "none"
             car.pit_stops += 1
 
     def check_incidents(self, car: Car) -> bool:
-    # Skip incident check for Carlos Sainz (car #55)
-     if car.driver.number == 55:
-        return False
+        # Skip incident check for Carlos Sainz (car #55)
+        if car.driver.number == 55:
+            return False
 
-     if self.dnf_count >= self.max_dnf or car.dnf or random.random() > 0.001:
-        return False
+        if self.dnf_count >= self.max_dnf or car.dnf or random.random() > 0.001:
+            return False
+        car.dnf = True
+        car.dnf_lap = self.current_lap
+        car.dnf_reason = random.choice(["Engine", "Gearbox", "Collision", "Hydraulics"])
+        self.dnf_count += 1
 
-     car.dnf = True
-     car.dnf_lap = self.current_lap
-     car.dnf_reason = random.choice(["Engine", "Gearbox", "Collision", "Hydraulics"])
-     self.dnf_count += 1
-
-     if not self.safety_car and random.random() < 0.7:
-        self.safety_car = True
-        self.safety_car_laps = 5
-        self.race_status = RaceStatus.SC
-        print(f"\n\U0001F4A5 Incident: {car.driver.name} - {car.dnf_reason}")
-        print("\U0001F6A8 Safety Car Deployed")
-     return True
-
+        if not self.safety_car and random.random() < 0.7:
+            self.safety_car = True
+            self.safety_car_laps = 5
+            self.race_status = RaceStatus.SC
+            print(f"\n\U0001F4A5 Incident: {car.driver.name} - {car.dnf_reason}")
+            print("\U0001F6A8 Safety Car Deployed")
+        return True
 
     def handle_overtakes(self, all_cars):
         for i in range(len(all_cars) - 1):
@@ -264,12 +313,9 @@ class F1Simulator:
 
             gap = car_behind.total_race_time - car_ahead.total_race_time
             
-            # Adjust gaps under safety car
             if self.safety_car and gap > 0.6:
                 car_behind.total_race_time = car_ahead.total_race_time + random.uniform(0.1, 0.5)
                 continue
-
-            overtake_probability = 0.0
 
             if gap <= 1.0:
                 performance_diff = (car_behind.driver.skill * TeamPerformance.FACTORS[car_behind.driver.team]["base"]) - \
@@ -280,11 +326,9 @@ class F1Simulator:
                 
                 overtake_probability = 0.3 + (performance_diff * 0.5) + (tire_diff * 0.2)
                 
-                # Higher probability in pit straight with DRS
                 if self.drs_enabled:
                     overtake_probability += 0.5
 
-                # Pit lane overtake
                 if car_ahead.pit_phase != "none" and car_behind.pit_phase == "none":
                     overtake_probability = 0.8
 
@@ -297,7 +341,6 @@ class F1Simulator:
                     message += f"{car_behind.driver.name} passes {car_ahead.driver.name}"
                     print(message)
 
-                    # Swap positions and adjust times
                     overtake_gap = random.uniform(0.69, 1.230)
                     car_behind.total_race_time = car_ahead.total_race_time - overtake_gap
                     car_behind.position, car_ahead.position = car_ahead.position, car_behind.position
@@ -315,6 +358,7 @@ class F1Simulator:
 
     def run_race(self):
         print(f"\nRace Start - {self.circuit_name}")
+        self.send_race_update()  # Initial race state
 
         for lap in range(1, self.total_laps + 1):
             self.current_lap = lap
@@ -348,12 +392,15 @@ class F1Simulator:
 
                     self.check_incidents(car)
 
-                print("\nPositions:")
+                # Update positions and send race update after each sector
                 all_cars = sorted(self.cars, key=lambda x: float('inf') if x.dnf else x.total_race_time)
                 leader_time = next((c.total_race_time for c in all_cars if not c.dnf), 0)
 
                 for pos, car in enumerate(all_cars, 1):
                     car.position = pos
+                    if not car.dnf:
+                        car.gap_to_leader = car.total_race_time - leader_time
+                    
                     status = car.update_status()
                     tire_info = "" if car.dnf else f"| {car.current_tire['color']}{car.current_tire['name']}\033[0m ({car.tire_age} laps)"
 
@@ -364,6 +411,8 @@ class F1Simulator:
                         gap_str = "LEADER" if gap == 0 else f"+{gap:.3f}s"
                         sector_time = getattr(car, f"sector{sector}_time", 0.0)
                         print(f"{pos}. {car.driver.name:15} | S{sector}: {sector_time:.3f} | Gap: {gap_str:10} | {status}")
+
+                self.send_race_update(sector)
 
                 if sector == 3 and not self.safety_car:
                     self.handle_overtakes(all_cars)
@@ -379,21 +428,21 @@ class F1Simulator:
 
             time.sleep(2)
 
-        # Display final results and standings
+        # Send final race update
+        self.send_race_update()
+        
         print("\n" + "=" * 80)
         print(f"RACE FINISHED - {self.circuit_name}")
         print("=" * 80)
-        
-        # Final Classification
-        print("\nFinal Classification:")
+
+        points_system = {1: 25, 2: 18, 3: 15, 4: 12, 5: 10, 6: 8, 7: 6, 8: 4, 9: 2, 10: 1}
         all_cars = sorted(self.cars, key=lambda x: float('inf') if x.dnf else x.total_race_time)
         leader_time = next((c.total_race_time for c in all_cars if not c.dnf), 0)
-        
-        points_system = {1: 25, 2: 18, 3: 15, 4: 12, 5: 10, 6: 8, 7: 6, 8: 4, 9: 2, 10: 1}
-        
+
+        print("\nFinal Classification:")
         for pos, car in enumerate(all_cars, 1):
             points = points_system.get(pos, 0)
-            if car == self.fastest_lap["driver"] and pos <= 10:  # Bonus point for fastest lap if in top 10
+            if car.driver == self.fastest_lap["driver"] and pos <= 10:
                 points += 1
                 fastest_lap_indicator = " \U0001F525 FASTEST LAP"
             else:
@@ -408,6 +457,9 @@ class F1Simulator:
 
         print("\nFastest Lap Award:")
         print(f"{self.fastest_lap['driver'].name}: {self.fastest_lap['time']:.3f}")
+        
+        # Close Kafka producer
+        self.producer.close()
 
 if __name__ == "__main__":
     sim = F1Simulator()
