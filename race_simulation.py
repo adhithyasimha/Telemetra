@@ -7,7 +7,7 @@ from enum import Enum
 import os
 from kafka import KafkaConsumer, KafkaProducer
 from datetime import datetime
-
+from kafka.structs import TopicPartition
 def clear_console():
     os.system('clear')
 
@@ -144,6 +144,7 @@ class F1Simulator:
 
         self.initialize_race()
 
+    
     def consume_grid_from_kafka(self):
         drivers_pool = [
             Driver("Max Verstappen", 1, "Red Bull", 0.92, 0.91, 0.90, 0.92),
@@ -169,29 +170,78 @@ class F1Simulator:
         ]
         driver_map = {driver.number: driver for driver in drivers_pool}
 
+        # Create consumer with specific settings for reading existing messages
         consumer = KafkaConsumer(
             'grid',
             bootstrap_servers='localhost:9092',
-            auto_offset_reset='earliest',
-            value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+            value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+            auto_offset_reset='earliest',  # Changed to earliest to read existing messages
+            consumer_timeout_ms=5000,  # 5 second timeout
+            group_id=f'race_sim_group_{int(time.time())}',  # Unique group ID
+            enable_auto_commit=False,
+            max_poll_records=1
         )
-        msg = next(consumer)
-        grid_data = msg.value
 
-        self.circuit_name = grid_data.get("circuit_name", "Unknown Circuit")
-        self.base_laptime = grid_data.get("pole_time", 95.0)
+        # Wait for consumer to be ready
+        while not consumer.assignment():
+            consumer.poll(timeout_ms=100)
+            time.sleep(0.1)
 
-        grid_order = [driver["number"] for driver in grid_data["grid_positions"]]
-        ordered_drivers = []
-        for number in grid_order:
-            driver = driver_map.get(number)
-            if driver:
-                ordered_drivers.append(driver)
-            else:
-                print(f"Driver number {number} not found in drivers pool.")
+        # Get all partitions
+        partitions = consumer.assignment()
         
-        return ordered_drivers
+        # Seek to end for each partition to get the latest offset
+        consumer.seek_to_end()
+        
+        # Get the latest message
+        latest_offsets = {tp: consumer.position(tp) for tp in partitions}
+        
+        messages = []
+        for tp in partitions:
+            if latest_offsets[tp] > 0:
+                # Seek to the last message
+                consumer.seek(tp, latest_offsets[tp] - 1)
+                partition_messages = consumer.poll(timeout_ms=5000)
+                for partition_record in partition_messages.values():
+                    messages.extend(partition_record)
 
+        if not messages:
+            print("Debug: No messages found. Checking topic details...")
+            print(f"Partitions: {partitions}")
+            print(f"Latest offsets: {latest_offsets}")
+            raise RuntimeError("No messages found in grid topic")
+
+        # Get the latest message
+        grid_data = messages[-1].value
+        consumer.close()
+
+        try:
+            self.circuit_name = grid_data.get("circuit_name", "Unknown Circuit")
+            self.base_laptime = grid_data.get("pole_time", 95.0)
+
+            grid_order = [driver["number"] for driver in grid_data["grid_positions"]]
+            ordered_drivers = []
+            
+            print("Debug: Grid data received:")
+            print(f"Circuit: {self.circuit_name}")
+            print(f"Grid order: {grid_order}")
+            
+            for number in grid_order:
+                driver = driver_map.get(number)
+                if driver:
+                    ordered_drivers.append(driver)
+                else:
+                    print(f"Driver number {number} not found in drivers pool.")
+            
+            if not ordered_drivers:
+                raise RuntimeError("No valid drivers found in grid message")
+                
+            return ordered_drivers
+            
+        except Exception as e:
+            print(f"Debug: Error processing grid data: {str(e)}")
+            print(f"Grid data content: {grid_data}")
+            raise
     def send_race_update(self, sector_number=None):
         race_data = {
             'timestamp': datetime.now().isoformat(),
