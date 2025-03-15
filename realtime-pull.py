@@ -7,6 +7,11 @@ session_info = RealF1Client(
     log_file_name="session_info.json"
 )
 
+telemetry = RealF1Client(
+    topics=["CarData.z"],  # Car telemetry
+    log_file_name="telemetry.json"
+)
+
 track_status = RealF1Client(
     topics=["TrackStatus"],
     log_file_name="track_status.json"
@@ -82,6 +87,7 @@ heartbeat.callback("heartbeat_handler")(lambda records: asyncio.create_task(hand
 lap_series.callback("lap_series_handler")(lambda records: asyncio.create_task(handle_data("LapSeries", records)))
 tyre_stint_series.callback("tyre_stint_series_handler")(lambda records: asyncio.create_task(handle_data("TyreStintSeries", records)))
 driver_list.callback("driver_list_handler")(lambda records: asyncio.create_task(handle_data("DriverList", records)))
+telemetry.callback("telemetry_handler")(lambda records: asyncio.create_task(handle_data("CarData.z", records)))
 
 # Main function to run all clients concurrently
 async def main():
