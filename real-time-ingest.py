@@ -39,7 +39,9 @@ team_radio.callback("team_radio_handler")(lambda records: asyncio.create_task(se
 race_control_messages.callback("race_control_messages_handler")(lambda records: asyncio.create_task(send_to_kafka("race_control_messages", records)))
 heartbeat.callback("heartbeat_handler")(lambda records: asyncio.create_task(send_to_kafka("heartbeat", records)))
 
+# Driver List now goes to Kafka
 driver_list.callback("driver_list_handler")(lambda records: asyncio.create_task(send_to_kafka("driver_list", records)))
+
 telemetry.callback("telemetry_handler")(lambda records: asyncio.create_task(send_to_kafka("telemetry", records)))
 
 # Main function to run all clients concurrently
