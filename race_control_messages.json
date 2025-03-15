@@ -1,0 +1,21 @@
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:00:00', 'Category': 'Flag', 'Flag': 'GREEN', 'Scope': 'Track', 'Message': 'GREEN LIGHT - PIT EXIT OPEN'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:03:00', 'Category': 'Other', 'Message': 'CAR 87 (BEA) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 2 16:01:40'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:07:03', 'Category': 'Other', 'Message': 'CAR 5 (BOR) LAP DELETED - TRACK LIMITS AT TURN 4 LAP 3 16:03:03'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:10:20', 'Category': 'Other', 'Message': 'CAR 27 (HUL) TIME 2:09.192 DELETED - TRACK LIMITS AT TURN 9 LAP 5 16:07:52'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:11:16', 'Category': 'Flag', 'Flag': 'YELLOW', 'Scope': 'Sector', 'Sector': 11, 'Message': 'YELLOW IN TRACK SECTOR 11'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:11:17', 'Category': 'Other', 'Message': 'DRS DISABLED IN ZONE 1'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:11:22', 'Category': 'Other', 'Message': 'DRS ENABLED IN ZONE 1'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:11:22', 'Category': 'Flag', 'Flag': 'CLEAR', 'Scope': 'Sector', 'Sector': 11, 'Message': 'CLEAR IN TRACK SECTOR 11'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:11:44', 'Category': 'Other', 'Message': 'CAR 30 (LAW) LAP DELETED - TRACK LIMITS AT TURN 3 LAP 6 16:10:18 (PIT)'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:12:07', 'Category': 'Other', 'Message': 'CAR 27 (HUL) TIME 1:21.477 DELETED - TRACK LIMITS AT TURN 11 LAP 6 16:09:32'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:17:18', 'Category': 'Other', 'Message': 'CAR 30 (LAW) LAP DELETED - TRACK LIMITS AT TURN 13 LAP 8 16:16:22'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:18:00', 'Category': 'Flag', 'Flag': 'CHEQUERED', 'Scope': 'Track', 'Message': 'CHEQUERED FLAG'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:18:09', 'Category': 'Other', 'Message': 'FIRST CAR TO TAKE THE FLAG - CAR 31 (OCO)'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:19:43', 'Category': 'Other', 'Message': 'CAR 31 (OCO) TIME 1:17.686 DELETED - TRACK LIMITS AT TURN 4 LAP 9 16:17:07'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:20:33', 'Category': 'Flag', 'Flag': 'YELLOW', 'Scope': 'Sector', 'Sector': 9, 'Message': 'YELLOW IN TRACK SECTOR 9'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:20:46', 'Category': 'Flag', 'Flag': 'CLEAR', 'Scope': 'Sector', 'Sector': 9, 'Message': 'CLEAR IN TRACK SECTOR 9'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:21:25', 'Category': 'Other', 'Message': 'FIA STEWARDS: Q1 INCIDENT INVOLVING CARS 87 (BEA), 6 (HAD) AND 63 (RUS) NOTED - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS - MAXIMUM DELTA TIME'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:22:44', 'Category': 'Other', 'Message': 'FIA STEWARDS: Q1 INCIDENT INVOLVING CARS 87 (BEA), 6 (HAD) AND 63 (RUS) WILL BE INVESTIGATED AFTER THE SESSION - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS - MAXIMUM DELTA TIME'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:25:00', 'Category': 'Flag', 'Flag': 'GREEN', 'Scope': 'Track', 'Message': 'GREEN LIGHT - PIT EXIT OPEN'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:31:04', 'Category': 'Other', 'Message': 'CAR 14 (ALO) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 11 16:29:29'}
+{'SessionKey': None, 'timestamp': None, 'Utc': '2025-03-15T05:32:39', 'Category': 'Other', 'Message': 'CAR 7 (DOO) TIME 1:16.995 DELETED - TRACK LIMITS AT TURN 12 LAP 12 16:32:02'}

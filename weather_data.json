@@ -1,0 +1,2 @@
+{'SessionKey': None, 'timestamp': None, 'AirTemp': '28.7', 'Humidity': '51.0', 'Pressure': '1009.3', 'Rainfall': '0', 'TrackTemp': '40.9', 'WindDirection': '142', 'WindSpeed': '1.1', '_kf': True}
+{'SessionKey': None, 'timestamp': '2025-03-15T05:35:22.82Z', 'AirTemp': '28.8', 'Humidity': '50.0', 'Pressure': '1009.2', 'Rainfall': '0', 'TrackTemp': '41.4', 'WindDirection': '192', 'WindSpeed': '0.6', '_kf': True}
