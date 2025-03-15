@@ -20,8 +20,6 @@ weather_data = RealF1Client(topics=["WeatherData"])
 team_radio = RealF1Client(topics=["TeamRadio"])
 race_control_messages = RealF1Client(topics=["RaceControlMessages"])
 heartbeat = RealF1Client(topics=["Heartbeat"])
-
-tyre_stint_series = RealF1Client(topics=["TyreStintSeries"])
 driver_list = RealF1Client(topics=["DriverList"])
 
 # Define callback function for sending data to Kafka
@@ -40,7 +38,7 @@ weather_data.callback("weather_data_handler")(lambda records: asyncio.create_tas
 team_radio.callback("team_radio_handler")(lambda records: asyncio.create_task(send_to_kafka("team_radio", records)))
 race_control_messages.callback("race_control_messages_handler")(lambda records: asyncio.create_task(send_to_kafka("race_control_messages", records)))
 heartbeat.callback("heartbeat_handler")(lambda records: asyncio.create_task(send_to_kafka("heartbeat", records)))
-tyre_stint_series.callback("tyre_stint_series_handler")(lambda records: asyncio.create_task(send_to_kafka("tyre_stint_series", records)))
+
 driver_list.callback("driver_list_handler")(lambda records: asyncio.create_task(send_to_kafka("driver_list", records)))
 telemetry.callback("telemetry_handler")(lambda records: asyncio.create_task(send_to_kafka("telemetry", records)))
 
@@ -56,7 +54,6 @@ async def main():
         team_radio._async_run(),
         race_control_messages._async_run(),
         heartbeat._async_run(),
-        tyre_stint_series._async_run(),
         driver_list._async_run(),
         telemetry._async_run()
     )
