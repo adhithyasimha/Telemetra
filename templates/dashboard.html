@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>F1 Race Day Dashboard</title>
+    <meta http-equiv="refresh" content="1"> <!-- Refresh every 1s -->
+    <style>
+        table { border-collapse: collapse; width: 80%; margin: 20px auto; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #333; color: white; }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">F1 Race Day - Live Telemetry</h1>
+    <table>
+        <tr>
+            <th>Driver</th>
+            <th>Speed (km/h)</th>
+            <th>RPM</th>
+        </tr>
+        {% for driver_no, details in drivers.items() %}
+        <tr style="background-color: #{{ details['TeamColour'] }};">
+            <td>{{ details['Tla'] }}</td>
+            <td>{{ telemetry[driver_no].get('speed', 'N/A') }}</td>
+            <td>{{ telemetry[driver_no].get('rpm', 'N/A') }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
