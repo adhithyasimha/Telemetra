@@ -7,23 +7,81 @@
         table { border-collapse: collapse; width: 80%; margin: 20px auto; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
         th { background-color: #333; color: white; }
+        .driver-row { cursor: pointer; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 50%;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
     </style>
+    <script>
+        function showTelemetry(driverNo, tla) {
+            fetch(`/telemetry/${driverNo}`)
+                .then(response => response.json())
+                .then(data => {
+                    const modal = document.getElementById('telemetryModal');
+                    const content = document.getElementById('modalContent');
+                    content.innerHTML = `
+                        <h2>Telemetry for ${tla}</h2>
+                        <p>Speed: ${data.speed || 'N/A'} km/h</p>
+                        <p>RPM: ${data.rpm || 'N/A'}</p>
+                    `;
+                    modal.style.display = 'block';
+                })
+                .catch(error => console.error('Error fetching telemetry:', error));
+        }
+
+        function closeModal() {
+            document.getElementById('telemetryModal').style.display = 'none';
+        }
+    </script>
 </head>
 <body>
-    <h1 style="text-align: center;">F1 Race Day - Live Telemetry</h1>
+    <h1 style="text-align: center;">F1 Race Day - Live Standings</h1>
     <table>
         <tr>
+            <th>Position</th>
             <th>Driver</th>
-            <th>Speed (km/h)</th>
-            <th>RPM</th>
+            <th>Best Lap Time</th>
+            <th>Sector 1</th>
+            <th>Sector 2</th>
+            <th>Sector 3</th>
         </tr>
         {% for driver_no, details in drivers.items() %}
-        <tr style="background-color: #{{ details['TeamColour'] }};">
+        <tr class="driver-row" style="background-color: #{{ details['TeamColour'] }};" onclick="showTelemetry('{{ driver_no }}', '{{ details['Tla'] }}')">
+            <td>{{ timing[driver_no].get('Position', 'N/A') }}</td>
             <td>{{ details['Tla'] }}</td>
-            <td>{{ telemetry[driver_no].get('speed', 'N/A') }}</td>
-            <td>{{ telemetry[driver_no].get('rpm', 'N/A') }}</td>
+            <td>{{ timing[driver_no].get('BestLapTime_Value', 'N/A') }}</td>
+            <td>{{ timing[driver_no].get('Sectors_1_Value', 'N/A') }}</td>
+            <td>{{ timing[driver_no].get('Sectors_2_Value', 'N/A') }}</td>
+            <td>{{ timing[driver_no].get('Sectors_3_Value', 'N/A') }}</td>
         </tr>
         {% endfor %}
     </table>
+
+    <div id="telemetryModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
 </body>
 </html>
