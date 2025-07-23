@@ -10,17 +10,17 @@ producer = KafkaProducer(
 )
 
 # Initialize clients for each data type
-# session_info = RealF1Client(topics=["SessionInfo"])# one time pull
-telemetry = RealF1Client(topics=["telemetry"])
-track_status = RealF1Client(topics=["trackstatus"])
-session_status = RealF1Client(topics=["sess_status"])
-timing_data_f1 = RealF1Client(topics=["timedata"])
-position = RealF1Client(topics=["position"])
-weather_data = RealF1Client(topics=["weatherdata"])
-team_radio = RealF1Client(topics=["teamradio"])
-race_control_messages = RealF1Client(topics=["rcm"])
-heartbeat = RealF1Client(topics=["heartbeat"])
-# driver_list = RealF1Client(topics=["DriverList"]) one time pull
+session_info = RealF1Client(topics=["SessionInfo"])
+telemetry = RealF1Client(topics=["CarData.z"])
+track_status = RealF1Client(topics=["TrackStatus"])
+session_status = RealF1Client(topics=["SessionStatus"])
+timing_data_f1 = RealF1Client(topics=["TimingDataF1"])
+position = RealF1Client(topics=["Position.z"])
+weather_data = RealF1Client(topics=["WeatherData"])
+team_radio = RealF1Client(topics=["TeamRadio"])
+race_control_messages = RealF1Client(topics=["RaceControlMessages"])
+heartbeat = RealF1Client(topics=["Heartbeat"])
+driver_list = RealF1Client(topics=["DriverList"])
 
 # General Kafka sender
 async def send_to_kafka(topic, records):
