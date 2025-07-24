@@ -5,7 +5,7 @@ import json
 import datetime
 
 # Read Kafka config from properties file
-def read_config(path="client.properties"):
+def read_config(path="backend/kafka_ingres/client.properties"):
     config = {}
     with open(path, "r") as f:
         for line in f:
@@ -36,8 +36,8 @@ topic_mapping = {
 
 # Initialize LiveF1 client
 client = RealF1Client(
-    topics=list(topic_mapping.keys()),  # LiveF1 data sources
-    log_file_name="livef1_session.json"  # optional local log
+    topics=list(topic_mapping.keys()),  
+    log_file_name="livef1_session.json"  
 )
 
 # Generic handler for all topics
