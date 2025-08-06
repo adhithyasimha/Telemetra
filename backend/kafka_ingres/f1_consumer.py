@@ -3,7 +3,7 @@ import json
 import sys
 
 # Load config
-def read_config(path="backend/kafka_ingres/client.properties"):
+def read_config(path="client.properties"):
     config = {}
     with open(path, "r") as f:
         for line in f:
@@ -12,16 +12,15 @@ def read_config(path="backend/kafka_ingres/client.properties"):
                 config[k.strip()] = v.strip()
     return config
 
-# Set group.id and auto.offset.reset
 consumer_config = read_config()
 consumer_config.update({
     "group.id": "f1-consumer-group",
-    "auto.offset.reset": "latest"  # or "earliest" for all data
+    "auto.offset.reset": "latest"  
 })
 
 # Kafka topics to consume
 topics = [
-    "position", "telemetry", "rcm", "teamradio", "trackstatus",
+    "telemetry", "rcm", "teamradio", "trackstatus",
     "sess_status", "currenttyres", "lapcount", "timedata", "tlarcm", "weatherdata"
 ]
 
@@ -33,7 +32,7 @@ print("🚦 Kafka consumer started...")
 
 try:
     while True:
-        msg = consumer.poll(1.0)  # timeout in seconds
+        msg = consumer.poll(1.0) 
         if msg is None:
             continue
         if msg.error():
@@ -43,10 +42,10 @@ try:
         data = json.loads(msg.value().decode("utf-8"))
         print(f"[{topic}] {data}")
 
-        # TODO: Save to memory/db, serve via API, or push to S3 etc.
+        # TODO: 
 
 except KeyboardInterrupt:
-    print("👋 Stopping consumer...")
+    print("Stopping consumer...")
 
 finally:
     consumer.close()

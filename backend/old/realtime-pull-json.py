@@ -92,18 +92,18 @@ telemetry.callback("telemetry_handler")(lambda records: asyncio.create_task(hand
 # Main function to run all clients concurrently
 async def main():
     await asyncio.gather(
-        session_info._async_run(),
-        track_status._async_run(),
-        session_status._async_run(),
-        timing_data_f1._async_run(),
-        position._async_run(),
-        weather_data._async_run(),
+        # session_info._async_run(),
+        # track_status._async_run(),
+        # session_status._async_run(),
+        # timing_data_f1._async_run(),
+        # position._async_run(),
+        # weather_data._async_run(),
         team_radio._async_run(),
         race_control_messages._async_run(),
-        heartbeat._async_run(),
-        lap_series._async_run(),
-        tyre_stint_series._async_run(),
-        driver_list._async_run()
+        # heartbeat._async_run(),
+        # lap_series._async_run(),
+        # tyre_stint_series._async_run(),
+        # driver_list._async_run()
     )
 
 if __name__ == "__main__":

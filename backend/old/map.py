@@ -55,16 +55,39 @@ def fetch_map(circuit_key: int, year: int = None) -> Map:
     if year is None:
         year = datetime.now().year
         
-    try:
-        response = requests.get(
-            f"https://api.multiviewer.app/api/v1/circuits/{circuit_key}/{year}",
-            timeout=10
-        )
-        response.raise_for_status()  # Raise exception for HTTP errors
-        return response.json()
-    except requests.RequestException as e:
-        print(f"Error fetching map: {e}")
-        return None
+    # Try current year first, then fallback to previous years
+    years_to_try = [year, year-1, year-2, 2024, 2023, 2022]
+    
+    for try_year in years_to_try:
+        try:
+            url = f"https://api.multiviewer.app/api/v1/circuits/{circuit_key}/{try_year}"
+            print(f"Trying URL: {url}")
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, timeout=10, headers=headers)
+            print(f"Response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                print(f"Successfully fetched data for year {try_year}")
+                return response.json()
+            elif response.status_code == 403:
+                print(f"403 Forbidden for year {try_year} - trying next year")
+                continue
+            elif response.status_code == 404:
+                print(f"404 Not Found for year {try_year} - trying next year")
+                continue
+            else:
+                response.raise_for_status()
+                
+        except requests.RequestException as e:
+            print(f"Error fetching map for year {try_year}: {e}")
+            continue
+    
+    print("Failed to fetch data for all attempted years")
+    return None
 
 
 def process_session_data(session_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -149,6 +172,7 @@ if __name__ == "__main__":
     print(f"Year: {processed_data['year']}")
     
     # Fetch the map data
+    print(f"\nAttempting to fetch map data...")
     map_data = fetch_map(processed_data['circuit_key'], processed_data['year'])
     
     if map_data:
@@ -163,6 +187,13 @@ if __name__ == "__main__":
             print("\nTrack map displayed. Close the window to continue.")
         except Exception as e:
             print(f"\nCouldn't display track map: {e}")
-            print("To view the track, make sure matplotlib is installed: pip install matplotlib")
+            print("To view the track, make sure matplotlib is installed:")
+            print("/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 -m pip install matplotlib")
     else:
         print("\nFailed to fetch track map data.")
+        print("Possible reasons:")
+        print("1. The API might require authentication")
+        print("2. The circuit key (10) might not be available for recent years")
+        print("3. The API might be rate-limited or temporarily unavailable")
+        print("\nTry visiting the API URL manually in a browser:")
+        print("https://api.multiviewer.app/api/v1/circuits/10/2024")

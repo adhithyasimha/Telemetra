@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>F1 Telemetry Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #f1f1f1;
+      padding: 20px;
+      margin: 0;
+    }
+    h1 {
+      text-align: center;
+      color: #e10600;
+      margin-bottom: 10px;
+    }
+    .status {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: #888;
+    }
+    .status.connected {
+      color: #4CAF50;
+    }
+    .status.error {
+      color: #f44336;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: #222;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+    th, td {
+      padding: 12px 8px;
+      text-align: center;
+      border: 1px solid #333;
+      font-size: 14px;
+    }
+    th {
+      background-color: #333;
+      color: #e10600;
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+    }
+    tr:nth-child(even) {
+      background-color: #1a1a1a;
+    }
+    tr:hover {
+      background-color: #2a2a2a;
+    }
+    .green { 
+      color: #4CAF50; 
+      font-weight: bold;
+    }
+    .red { 
+      color: #f44336; 
+      font-weight: bold;
+    }
+    .yellow {
+      color: #FFC107;
+      font-weight: bold;
+    }
+    .purple {
+      color: #9C27B0;
+      font-weight: bold;
+    }
+    .cyan {
+      color: #00BCD4;
+      font-weight: bold;
+    }
+    .driver-no {
+      font-weight: bold;
+      color: #e10600;
+    }
+    .driver-tla {
+      font-weight: bold;
+      font-size: 14px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 2px solid;
+    }
+    .timestamp {
+      font-size: 11px;
+      color: #888;
+    }
+    .no-data {
+      text-align: center;
+      color: #888;
+      font-style: italic;
+      padding: 40px;
+    }
+    .drs-active {
+      background-color: #4CAF50;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    .drs-inactive {
+      background-color: #666;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    .gap-leader {
+      color: #FFC107;
+      font-weight: bold;
+    }
+    .sector-time {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+    .position {
+      font-weight: bold;
+      color: #e10600;
+      font-size: 16px;
+      width: 40px;
+    }
+    .position.p1 { color: #FFD700; }
+    .position.p2 { color: #C0C0C0; }
+    .position.p3 { color: #CD7F32; }
+  </style>
+</head>
+<body>
+<h1>Timing Tower</h1>
+<div id="status" class="status">Connecting...</div>
+
+<table id="telemetry-table">
+  <thead>
+    <tr>
+      <th>Pos</th>
+      <th>Driver</th>
+      <th>Gap</th>
+      <th>Speed<br>(km/h)</th>
+      <th>S1</th>
+      <th>S2</th>
+      <th>S3</th>
+      <th>Throttle<br>(%)</th>
+      <th>Brake<br>(%)</th>
+      <th>DRS</th>
+    </tr>
+  </thead>
+  <tbody id="telemetry-body">
+    <tr>
+      <td colspan="10" class="no-data">Loading telemetry data...</td>
+    </tr>
+  </tbody>
+</table>
+
+<script>
+  const statusElement = document.getElementById('status');
+  let consecutiveErrors = 0;
+
+  function formatTimestamp(timestamp) {
+    if (!timestamp || timestamp === 'N/A') return 'N/A';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString();
+    } catch (e) {
+      return timestamp;
+    }
+  }
+
+  function formatDRS(drs) {
+    const drsValue = parseInt(drs);
+    if (drsValue === 1) {
+      return '<span class="drs-active">ACTIVE</span>';
+    } else {
+      return '<span class="drs-inactive">OFF</span>';
+    }
+  }
+
+  function getSpeedClass(speed) {
+    const speedValue = parseInt(speed);
+    if (speedValue > 250) return 'red';
+    if (speedValue > 150) return 'yellow';
+    return 'green';
+  }
+
+  function getBrakeClass(brake) {
+    const brakeValue = parseInt(brake);
+    return brakeValue > 0 ? 'red' : '';
+  }
+
+  function formatDriverTla(tla, teamColor) {
+    if (!tla || tla === 'N/A') return 'N/A';
+    
+    const color = teamColor && teamColor !== 'FFFFFF' ? `#${teamColor}` : '#e10600';
+    
+    return `<span class="driver-tla" style="color: ${color}; border-color: ${color};">${tla}</span>`;
+  }
+
+  function getPositionClass(position) {
+    const pos = parseInt(position);
+    if (pos === 1) return 'position p1';
+    if (pos === 2) return 'position p2';
+    if (pos === 3) return 'position p3';
+    return 'position';
+  }
+
+  function formatSectorTime(time) {
+    if (!time || time === 'N/A' || time === '') {
+      return '<span class="sector-time">--:--</span>';
+    }
+    return `<span class="sector-time purple">${time}</span>`;
+  }
+
+  function formatGapToLeader(gap) {
+    if (!gap || gap === 'N/A' || gap === '') {
+      return '<span class="gap-leader">--</span>';
+    }
+    
+    // If it's the leader (no gap), show "LEADER"
+    if (gap === '0' || gap === '0.000' || gap === '+0.000') {
+      return '<span class="gap-leader green">LEADER</span>';
+    }
+    
+    return `<span class="gap-leader">${gap}</span>`;
+  }
+
+  async function fetchTelemetry() {
+    try {
+      const res = await fetch('/api/telemetry');
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
+      const data = await res.json();
+      const tbody = document.getElementById('telemetry-body');
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">No telemetry data available</td></tr>';
+        statusElement.textContent = 'No data available';
+        statusElement.className = 'status error';
+        return;
+      }
+
+      tbody.innerHTML = '';  // Clear old rows
+      
+      data.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="${getPositionClass(item.Position)}">${item.Position || 'N/A'}</td>
+          <td>${formatDriverTla(item.DriverTla, item.TeamColor)}</td>
+          <td>${formatGapToLeader(item.gap_to_leader)}</td>
+          <td class="${getSpeedClass(item.speed)}">${item.speed || '0'}</td>
+          <td>${formatSectorTime(item.s1)}</td>
+          <td>${formatSectorTime(item.s2)}</td>
+          <td>${formatSectorTime(item.s3)}</td>
+          <td class="green">${item.throttle || '0'}</td>
+          <td class="${getBrakeClass(item.brake)}">${item.brake || '0'}</td>
+          <td>${formatDRS(item.drs)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      // Update status
+      statusElement.textContent = `Connected • ${data.length} drivers • Last update: ${new Date().toLocaleTimeString()}`;
+      statusElement.className = 'status connected';
+      consecutiveErrors = 0;
+
+    } catch (err) {
+      console.error('Failed to fetch telemetry:', err);
+      consecutiveErrors++;
+      
+      if (consecutiveErrors > 3) {
+        const tbody = document.getElementById('telemetry-body');
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Connection lost - retrying...</td></tr>';
+      }
+      
+      statusElement.textContent = `Connection error (${consecutiveErrors}) - ${err.message}`;
+      statusElement.className = 'status error';
+    }
+  }
+
+
+  setInterval(fetchTelemetry, 1500);
+  fetchTelemetry(); // Initial load
+</script>
+</body>
+</html>

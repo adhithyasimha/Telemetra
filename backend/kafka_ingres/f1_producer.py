@@ -5,7 +5,7 @@ import json
 import datetime
 
 # Read Kafka config from properties file
-def read_config(path="backend/kafka_ingres/client.properties"):
+def read_config(path="client.properties"):
     config = {}
     with open(path, "r") as f:
         for line in f:
@@ -21,12 +21,9 @@ producer = Producer(kafka_config)
 # LiveF1 topics → Confluent Kafka topics (must match)
 topic_mapping = {
     "CurrentTyres": "currenttyres",
-    "Heartbeat": "heartbeat",
     "LapCount": "lapcount",
-    "Position.z": "position",
     "RaceControlMessages": "rcm",
     "SessionStatus": "sess_status",
-    "TeamRadio": "teamradio",
     "CarData.z": "telemetry",
     "TimingData": "timedata",
     "TlaRcm": "tlarcm",
