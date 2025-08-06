@@ -28,8 +28,14 @@ schema = StructType() \
 # Read from Kafka
 df = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "your-kafka-broker:9092") \
-    .option("subscribe", "timedata") \
+    .option("kafka.bootstrap.servers", "pkc-p11xm.us-east-1.aws.confluent.cloud:9092") \
+    .option("kafka.security.protocol", "SASL_SSL") \
+    .option("kafka.sasl.mechanisms", "PLAIN") \
+    .option("kafka.sasl.username", "nah") \
+    .option("kafka.sasl.password", "nah") \
+    .option("kafka.session.timeout.ms", "45000") \
+    .option("kafka.client.id", "ccloud-python-client-3a0fabd2-56c6-4ba1-b185-4ac8f686dd2a") \
+    .option("subscribe", "timing_data_f1") \
     .option("startingOffsets", "latest") \
     .load()
 
@@ -51,7 +57,7 @@ sector_df = converted_df.select(
     col("DriverNo"),
     col("LapNumber"), 
     col("timestamp"),
-    # Create array of sector completions
+
     expr("array(struct(1 as sector_num, S1 as sector_time, timestamp), " +
          "struct(2 as sector_num, S2 as sector_time, timestamp), " +
          "struct(3 as sector_num, S3 as sector_time, timestamp)) as sectors")

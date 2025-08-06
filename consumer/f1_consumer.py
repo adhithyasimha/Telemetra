@@ -2,7 +2,6 @@ from confluent_kafka import Consumer, KafkaException
 import json
 import sys
 
-# Load config
 def read_config(path="client.properties"):
     config = {}
     with open(path, "r") as f:

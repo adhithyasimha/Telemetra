@@ -1,0 +1,3 @@
+# Ignore Kafka credentials
+client.properties
+kafka_ingest/client.properties
