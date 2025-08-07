@@ -129,8 +129,8 @@ incomplete_laps_df = windowed_df \
 
 # Final output with proper primary key structure
 final_df = complete_laps_df.select(
-    col("LapNumber"),           # Primary key part 1
-    col("DriverNo"),            # Primary key part 2  
+    col("LapNumber"),           # Primary key part 
+    col("DriverNo"),             
     col("S1"),
     col("S2"),
     col("S3"),
@@ -142,10 +142,7 @@ final_df = complete_laps_df.select(
 def write_to_redshift(batch_df, batch_id):
     try:
         print(f"Processing batch {batch_id} with {batch_df.count()} records")
-        
-        # Show sample data for debugging
         batch_df.show(5, truncate=False)
-        
         batch_df.write \
             .format("jdbc") \
             .option("url", "jdbc:redshift://your-redshift-cluster:5439/yourdb") \
@@ -158,10 +155,9 @@ def write_to_redshift(batch_df, batch_id):
             .save()
             
         print(f"Successfully wrote batch {batch_id}")
-        
     except Exception as e:
         print(f"Error writing batch {batch_id}: {str(e)}")
-        # Optionally write to error table or dead letter queue
+
         
 # Start streaming query with optimized trigger interval
 query = final_df.writeStream \
@@ -171,7 +167,6 @@ query = final_df.writeStream \
     .trigger(processingTime='20 seconds') \
     .start()
 
-# Optional: Start monitoring query for incomplete laps
 incomplete_query = incomplete_laps_df.writeStream \
     .foreachBatch(lambda df, batch_id: df.show(truncate=False)) \
     .outputMode("append") \
