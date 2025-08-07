@@ -1,9 +1,15 @@
 import asyncio
 import json
+import logging
 import sys
 import boto3
 from datetime import datetime
 from livef1.adapters import RealF1Client
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 
 s3 = boto3.client("s3")
 DRIVER_BUCKET = "f1-driverlist"
