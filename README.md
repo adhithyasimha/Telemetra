@@ -1,2 +1,2 @@
 ## Architecture
-<img width="952" height="498" alt="Screenshot 2025-08-08 at 2 19 43 PM" src="https://github.com/user-attachments/assets/7be38b3e-2f1a-4157-a721-1f3d420c056f" />
+<img width="1040" height="588" alt="Screenshot 2025-08-10 at 8 01 22 PM" src="https://github.com/user-attachments/assets/096ca927-bf39-4ca8-bfeb-8736cb385e46" />
